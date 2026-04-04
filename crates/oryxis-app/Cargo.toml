@@ -1,0 +1,20 @@
+[package]
+name = "oryxis-app"
+version = "0.1.0"
+edition = "2024"
+
+[[bin]]
+name = "oryxis"
+path = "src/main.rs"
+
+[dependencies]
+oryxis-core = { workspace = true }
+oryxis-ssh = { workspace = true }
+oryxis-terminal = { workspace = true }
+oryxis-vault = { workspace = true }
+oryxis-sync = { workspace = true }
+iced = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+tokio-stream = { workspace = true }

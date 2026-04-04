@@ -1,0 +1,67 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/oryxis-core",
+    "crates/oryxis-ssh",
+    "crates/oryxis-terminal",
+    "crates/oryxis-vault",
+    "crates/oryxis-sync",
+    "crates/oryxis-app",
+]
+
+[workspace.dependencies]
+# UI
+iced = { version = "0.14", features = ["canvas", "tokio", "advanced", "image"] }
+
+# SSH
+russh = "0.48"
+
+# Terminal parsing
+alacritty_terminal = "0.25"
+vte = "0.15"
+
+# PTY
+portable-pty = "0.9"
+
+# Font shaping
+cosmic-text = "0.18"
+
+# Crypto
+age = "0.10"
+argon2 = "0.5"
+chacha20poly1305 = "0.10"
+secrecy = { version = "0.8", features = ["serde"] }
+
+# P2P
+iroh = "0.97"
+
+# Storage
+rusqlite = { version = "0.32", features = ["bundled"] }
+
+# Async
+tokio = { version = "1", features = ["full"] }
+tokio-stream = "0.1"
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+toml = "0.8"
+
+# Utils
+uuid = { version = "1", features = ["v4", "serde"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+thiserror = "2"
+chrono = { version = "0.4", features = ["serde"] }
+
+# Internal crates
+oryxis-core = { path = "crates/oryxis-core" }
+oryxis-ssh = { path = "crates/oryxis-ssh" }
+oryxis-terminal = { path = "crates/oryxis-terminal" }
+oryxis-vault = { path = "crates/oryxis-vault" }
+oryxis-sync = { path = "crates/oryxis-sync" }
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+strip = true
