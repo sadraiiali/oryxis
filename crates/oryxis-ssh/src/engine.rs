@@ -494,24 +494,31 @@ impl SshEngine {
                     .await?)
             }
             AuthMethod::Agent => {
-                match russh_keys::agent::client::AgentClient::connect_env().await {
-                    Ok(mut agent) => {
-                        let identities = agent
-                            .request_identities()
-                            .await
-                            .map_err(|e| SshError::Key(format!("Agent: {}", e)))?;
-
-                        for identity in identities {
-                            if let Ok(true) = handle
-                                .authenticate_publickey_with(username, identity, &mut agent)
+                #[cfg(unix)]
+                {
+                    match russh_keys::agent::client::AgentClient::connect_env().await {
+                        Ok(mut agent) => {
+                            let identities = agent
+                                .request_identities()
                                 .await
-                            {
-                                return Ok(true);
+                                .map_err(|e| SshError::Key(format!("Agent: {}", e)))?;
+
+                            for identity in identities {
+                                if let Ok(true) = handle
+                                    .authenticate_publickey_with(username, identity, &mut agent)
+                                    .await
+                                {
+                                    return Ok(true);
+                                }
                             }
+                            Ok(false)
                         }
-                        Ok(false)
+                        Err(e) => Err(SshError::Key(format!("ssh-agent not available: {}", e))),
                     }
-                    Err(e) => Err(SshError::Key(format!("ssh-agent not available: {}", e))),
+                }
+                #[cfg(not(unix))]
+                {
+                    Err(SshError::Key("ssh-agent is not supported on this platform".into()))
                 }
             }
             AuthMethod::Interactive => {
