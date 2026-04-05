@@ -13,7 +13,7 @@
   <a href="https://github.com/wilsonglasser/oryxis/releases/latest"><img src="https://img.shields.io/github/v/release/wilsonglasser/oryxis?color=green" alt="Release"></a>
   <img src="https://img.shields.io/badge/rust-1.90%2B-orange?logo=rust" alt="Rust">
   <img src="https://img.shields.io/badge/platforms-linux%20%7C%20macos%20%7C%20windows-blue" alt="Platforms">
-  <img src="https://img.shields.io/github/license/wilsonglasser/oryxis" alt="License">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-AGPL--3.0-blue" alt="License"></a>
 </p>
 
 ---
