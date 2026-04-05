@@ -68,3 +68,60 @@ pub enum ProxyType {
     Http,
     Command(String),
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn new_connection_defaults() {
+        let conn = Connection::new("test", "10.0.0.1");
+        assert_eq!(conn.label, "test");
+        assert_eq!(conn.hostname, "10.0.0.1");
+        assert_eq!(conn.port, 22);
+        assert_eq!(conn.auth_method, AuthMethod::Password);
+        assert!(conn.username.is_none());
+        assert!(conn.jump_chain.is_empty());
+        assert!(conn.proxy.is_none());
+    }
+
+    #[test]
+    fn connection_serialization_roundtrip() {
+        let mut conn = Connection::new("prod", "server.example.com");
+        conn.username = Some("deploy".into());
+        conn.auth_method = AuthMethod::Key;
+        conn.tags = vec!["production".into(), "web".into()];
+
+        let json = serde_json::to_string(&conn).unwrap();
+        let deserialized: Connection = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(deserialized.label, "prod");
+        assert_eq!(deserialized.hostname, "server.example.com");
+        assert_eq!(deserialized.username, Some("deploy".into()));
+        assert_eq!(deserialized.auth_method, AuthMethod::Key);
+        assert_eq!(deserialized.tags.len(), 2);
+    }
+
+    #[test]
+    fn proxy_config_serialization() {
+        let proxy = ProxyConfig {
+            proxy_type: ProxyType::Socks5,
+            host: "proxy.local".into(),
+            port: 1080,
+            username: Some("user".into()),
+        };
+
+        let json = serde_json::to_string(&proxy).unwrap();
+        let de: ProxyConfig = serde_json::from_str(&json).unwrap();
+        assert_eq!(de.proxy_type, ProxyType::Socks5);
+        assert_eq!(de.port, 1080);
+    }
+
+    #[test]
+    fn auth_method_variants() {
+        assert_eq!(serde_json::to_string(&AuthMethod::Password).unwrap(), "\"Password\"");
+        assert_eq!(serde_json::to_string(&AuthMethod::Key).unwrap(), "\"Key\"");
+        assert_eq!(serde_json::to_string(&AuthMethod::Agent).unwrap(), "\"Agent\"");
+        assert_eq!(serde_json::to_string(&AuthMethod::Interactive).unwrap(), "\"Interactive\"");
+    }
+}

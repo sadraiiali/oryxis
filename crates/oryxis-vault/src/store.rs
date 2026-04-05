@@ -767,3 +767,327 @@ impl VaultStore {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use oryxis_core::models::connection::{AuthMethod, Connection};
+    use oryxis_core::models::group::Group;
+    use oryxis_core::models::key::{KeyAlgorithm, SshKey};
+    use oryxis_core::models::known_host::KnownHost;
+    use oryxis_core::models::log_entry::{LogEntry, LogEvent};
+    use oryxis_core::models::snippet::Snippet;
+    use std::path::PathBuf;
+    use tempfile::NamedTempFile;
+
+    fn temp_vault() -> VaultStore {
+        let tmp = NamedTempFile::new().unwrap();
+        let path = tmp.path().to_path_buf();
+        // Keep the file alive by leaking it (tests are short-lived)
+        std::mem::forget(tmp);
+        VaultStore::open(&path).unwrap()
+    }
+
+    fn unlocked_vault() -> VaultStore {
+        let mut vault = temp_vault();
+        vault.set_master_password("testpass123").unwrap();
+        vault
+    }
+
+    // ── Crypto ──
+
+    #[test]
+    fn encrypt_decrypt_roundtrip() {
+        let password = b"mysecretpassword";
+        let plaintext = b"hello world, this is a secret";
+        let encrypted = encrypt(plaintext, password).unwrap();
+        assert_ne!(encrypted, plaintext);
+        assert!(encrypted.len() > plaintext.len());
+        let decrypted = decrypt(&encrypted, password).unwrap();
+        assert_eq!(decrypted, plaintext);
+    }
+
+    #[test]
+    fn decrypt_wrong_password_fails() {
+        let encrypted = encrypt(b"secret data", b"correct_password").unwrap();
+        let result = decrypt(&encrypted, b"wrong_password");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn decrypt_truncated_data_fails() {
+        let result = decrypt(&[0u8; 10], b"password");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn encrypt_produces_different_ciphertext_each_time() {
+        let password = b"password";
+        let plaintext = b"same data";
+        let a = encrypt(plaintext, password).unwrap();
+        let b = encrypt(plaintext, password).unwrap();
+        assert_ne!(a, b); // random salt + nonce
+    }
+
+    // ── Vault lifecycle ──
+
+    #[test]
+    fn new_vault_has_no_master_password() {
+        let vault = temp_vault();
+        assert!(!vault.has_master_password().unwrap());
+        assert!(vault.is_locked());
+    }
+
+    #[test]
+    fn set_master_password_unlocks() {
+        let mut vault = temp_vault();
+        vault.set_master_password("mypass").unwrap();
+        assert!(!vault.is_locked());
+    }
+
+    #[test]
+    fn set_master_password_twice_fails() {
+        let mut vault = temp_vault();
+        vault.set_master_password("mypass").unwrap();
+        let result = vault.set_master_password("another");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn lock_and_unlock() {
+        let mut vault = temp_vault();
+        vault.set_master_password("mypass").unwrap();
+        vault.lock();
+        assert!(vault.is_locked());
+        vault.unlock("mypass").unwrap();
+        assert!(!vault.is_locked());
+    }
+
+    #[test]
+    fn unlock_wrong_password_fails() {
+        let mut vault = temp_vault();
+        vault.set_master_password("correct").unwrap();
+        vault.lock();
+        let result = vault.unlock("wrong");
+        assert!(result.is_err());
+        assert!(vault.is_locked());
+    }
+
+    // ── Connections CRUD ──
+
+    #[test]
+    fn save_and_list_connections() {
+        let vault = unlocked_vault();
+        let conn = Connection::new("prod-web", "192.168.1.10");
+        vault.save_connection(&conn, Some("secret123")).unwrap();
+
+        let conns = vault.list_connections().unwrap();
+        assert_eq!(conns.len(), 1);
+        assert_eq!(conns[0].label, "prod-web");
+        assert_eq!(conns[0].hostname, "192.168.1.10");
+    }
+
+    #[test]
+    fn connection_password_encrypted_and_retrievable() {
+        let vault = unlocked_vault();
+        let conn = Connection::new("test", "host.example.com");
+        vault.save_connection(&conn, Some("supersecret")).unwrap();
+
+        let pw = vault.get_connection_password(&conn.id).unwrap();
+        assert_eq!(pw, Some("supersecret".to_string()));
+    }
+
+    #[test]
+    fn connection_password_not_readable_when_locked() {
+        let mut vault = unlocked_vault();
+        let conn = Connection::new("test", "host");
+        vault.save_connection(&conn, Some("pw")).unwrap();
+        vault.lock();
+
+        let result = vault.get_connection_password(&conn.id);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn delete_connection() {
+        let vault = unlocked_vault();
+        let conn = Connection::new("temp", "10.0.0.1");
+        vault.save_connection(&conn, None).unwrap();
+        assert_eq!(vault.list_connections().unwrap().len(), 1);
+
+        vault.delete_connection(&conn.id).unwrap();
+        assert_eq!(vault.list_connections().unwrap().len(), 0);
+    }
+
+    #[test]
+    fn update_connection_preserves_password() {
+        let vault = unlocked_vault();
+        let mut conn = Connection::new("server", "1.2.3.4");
+        vault.save_connection(&conn, Some("original_pw")).unwrap();
+
+        conn.label = "server-renamed".into();
+        vault.save_connection(&conn, None).unwrap(); // no password = keep existing
+
+        let pw = vault.get_connection_password(&conn.id).unwrap();
+        assert_eq!(pw, Some("original_pw".to_string()));
+
+        let conns = vault.list_connections().unwrap();
+        assert_eq!(conns[0].label, "server-renamed");
+    }
+
+    // ── Keys CRUD ──
+
+    #[test]
+    fn save_and_list_keys() {
+        let vault = unlocked_vault();
+        let key = SshKey::new("my-key", KeyAlgorithm::Ed25519);
+        vault.save_key(&key, Some("-----BEGIN PRIVATE KEY-----\nfake\n-----END PRIVATE KEY-----")).unwrap();
+
+        let keys = vault.list_keys().unwrap();
+        assert_eq!(keys.len(), 1);
+        assert_eq!(keys[0].label, "my-key");
+    }
+
+    #[test]
+    fn key_private_encrypted_and_retrievable() {
+        let vault = unlocked_vault();
+        let key = SshKey::new("test-key", KeyAlgorithm::Rsa4096);
+        let pem = "-----BEGIN RSA PRIVATE KEY-----\nMIIE...\n-----END RSA PRIVATE KEY-----";
+        vault.save_key(&key, Some(pem)).unwrap();
+
+        let retrieved = vault.get_key_private(&key.id).unwrap();
+        assert_eq!(retrieved, Some(pem.to_string()));
+    }
+
+    #[test]
+    fn delete_key() {
+        let vault = unlocked_vault();
+        let key = SshKey::new("disposable", KeyAlgorithm::Ed25519);
+        vault.save_key(&key, None).unwrap();
+        vault.delete_key(&key.id).unwrap();
+        assert_eq!(vault.list_keys().unwrap().len(), 0);
+    }
+
+    // ── Groups CRUD ──
+
+    #[test]
+    fn save_and_list_groups() {
+        let vault = unlocked_vault();
+        let g = Group::new("Production");
+        vault.save_group(&g).unwrap();
+
+        let groups = vault.list_groups().unwrap();
+        assert_eq!(groups.len(), 1);
+        assert_eq!(groups[0].label, "Production");
+    }
+
+    #[test]
+    fn delete_group() {
+        let vault = unlocked_vault();
+        let g = Group::new("Temp");
+        vault.save_group(&g).unwrap();
+        vault.delete_group(&g.id).unwrap();
+        assert_eq!(vault.list_groups().unwrap().len(), 0);
+    }
+
+    // ── Snippets CRUD ──
+
+    #[test]
+    fn save_and_list_snippets() {
+        let vault = unlocked_vault();
+        let s = Snippet::new("restart-nginx", "sudo systemctl restart nginx");
+        vault.save_snippet(&s).unwrap();
+
+        let snippets = vault.list_snippets().unwrap();
+        assert_eq!(snippets.len(), 1);
+        assert_eq!(snippets[0].command, "sudo systemctl restart nginx");
+    }
+
+    #[test]
+    fn delete_snippet() {
+        let vault = unlocked_vault();
+        let s = Snippet::new("temp", "echo hi");
+        vault.save_snippet(&s).unwrap();
+        vault.delete_snippet(&s.id).unwrap();
+        assert_eq!(vault.list_snippets().unwrap().len(), 0);
+    }
+
+    // ── Known Hosts ──
+
+    #[test]
+    fn save_and_list_known_hosts() {
+        let vault = unlocked_vault();
+        let kh = KnownHost::new("example.com", 22, "ssh-ed25519", "SHA256:abc123");
+        vault.save_known_host(&kh).unwrap();
+
+        let hosts = vault.list_known_hosts().unwrap();
+        assert_eq!(hosts.len(), 1);
+        assert_eq!(hosts[0].hostname, "example.com");
+        assert_eq!(hosts[0].fingerprint, "SHA256:abc123");
+    }
+
+    #[test]
+    fn known_host_unique_per_host_port() {
+        let vault = unlocked_vault();
+        let kh1 = KnownHost::new("server.com", 22, "ssh-ed25519", "SHA256:first");
+        vault.save_known_host(&kh1).unwrap();
+
+        let kh2 = KnownHost::new("server.com", 22, "ssh-rsa", "SHA256:second");
+        vault.save_known_host(&kh2).unwrap();
+
+        let hosts = vault.list_known_hosts().unwrap();
+        assert_eq!(hosts.len(), 1); // UNIQUE constraint
+    }
+
+    #[test]
+    fn delete_known_host() {
+        let vault = unlocked_vault();
+        let kh = KnownHost::new("host.test", 22, "ed25519", "SHA256:xyz");
+        vault.save_known_host(&kh).unwrap();
+        vault.delete_known_host(&kh.id).unwrap();
+        assert_eq!(vault.list_known_hosts().unwrap().len(), 0);
+    }
+
+    // ── Logs ──
+
+    #[test]
+    fn add_and_list_logs() {
+        let vault = unlocked_vault();
+        let entry = LogEntry::new("prod-web", "192.168.1.10", LogEvent::Connected, "OK");
+        vault.add_log(&entry).unwrap();
+
+        let logs = vault.list_logs(10).unwrap();
+        assert_eq!(logs.len(), 1);
+        assert_eq!(logs[0].connection_label, "prod-web");
+    }
+
+    #[test]
+    fn logs_ordered_by_timestamp_desc() {
+        let vault = unlocked_vault();
+        vault.add_log(&LogEntry::new("first", "h1", LogEvent::Connected, "")).unwrap();
+        std::thread::sleep(std::time::Duration::from_millis(10));
+        vault.add_log(&LogEntry::new("second", "h2", LogEvent::Disconnected, "")).unwrap();
+
+        let logs = vault.list_logs(10).unwrap();
+        assert_eq!(logs[0].connection_label, "second"); // most recent first
+    }
+
+    #[test]
+    fn clear_logs() {
+        let vault = unlocked_vault();
+        vault.add_log(&LogEntry::new("x", "y", LogEvent::Error, "fail")).unwrap();
+        vault.add_log(&LogEntry::new("a", "b", LogEvent::Connected, "ok")).unwrap();
+        vault.clear_logs().unwrap();
+        assert_eq!(vault.list_logs(100).unwrap().len(), 0);
+    }
+
+    #[test]
+    fn logs_limit_works() {
+        let vault = unlocked_vault();
+        for i in 0..20 {
+            vault.add_log(&LogEntry::new(&format!("conn-{}", i), "h", LogEvent::Connected, "")).unwrap();
+        }
+        let logs = vault.list_logs(5).unwrap();
+        assert_eq!(logs.len(), 5);
+    }
+}

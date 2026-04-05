@@ -68,3 +68,50 @@ pub fn import_key(label: &str, private_pem: &str) -> Result<GeneratedKey, VaultE
         private_pem: private_pem.to_string(),
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn generate_ed25519_produces_valid_key() {
+        let result = generate_ed25519("test-key").unwrap();
+        assert_eq!(result.key.label, "test-key");
+        assert_eq!(result.key.algorithm, KeyAlgorithm::Ed25519);
+        assert!(!result.key.fingerprint.is_empty());
+        assert!(result.key.public_key.starts_with("ssh-ed25519 "));
+        assert!(result.private_pem.contains("BEGIN OPENSSH PRIVATE KEY"));
+    }
+
+    #[test]
+    fn generate_ed25519_unique_keys() {
+        let a = generate_ed25519("key-a").unwrap();
+        let b = generate_ed25519("key-b").unwrap();
+        assert_ne!(a.key.fingerprint, b.key.fingerprint);
+        assert_ne!(a.private_pem, b.private_pem);
+    }
+
+    #[test]
+    fn import_roundtrip() {
+        // Generate then import
+        let generated = generate_ed25519("original").unwrap();
+        let imported = import_key("imported", &generated.private_pem).unwrap();
+        assert_eq!(imported.key.fingerprint, generated.key.fingerprint);
+        assert_eq!(imported.key.algorithm, KeyAlgorithm::Ed25519);
+        assert_eq!(imported.key.public_key, generated.key.public_key);
+    }
+
+    #[test]
+    fn import_invalid_pem_fails() {
+        let result = import_key("bad", "this is not a key");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn import_with_whitespace() {
+        let generated = generate_ed25519("ws-test").unwrap();
+        let padded = format!("\n  {}  \n", generated.private_pem);
+        let imported = import_key("trimmed", &padded).unwrap();
+        assert_eq!(imported.key.fingerprint, generated.key.fingerprint);
+    }
+}

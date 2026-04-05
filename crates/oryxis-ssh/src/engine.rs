@@ -629,3 +629,52 @@ fn parse_addr(addr: &str) -> Result<(String, u32), SshError> {
         .map_err(|_| SshError::ConnectionFailed(format!("Invalid port in: {}", addr)))?;
     Ok((parts[1].to_string(), port))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_addr_valid() {
+        let (host, port) = parse_addr("192.168.1.1:22").unwrap();
+        assert_eq!(host, "192.168.1.1");
+        assert_eq!(port, 22);
+    }
+
+    #[test]
+    fn parse_addr_hostname() {
+        let (host, port) = parse_addr("server.example.com:2222").unwrap();
+        assert_eq!(host, "server.example.com");
+        assert_eq!(port, 2222);
+    }
+
+    #[test]
+    fn parse_addr_no_port_fails() {
+        assert!(parse_addr("192.168.1.1").is_err());
+    }
+
+    #[test]
+    fn parse_addr_bad_port_fails() {
+        assert!(parse_addr("host:abc").is_err());
+    }
+
+    #[test]
+    fn parse_addr_ipv6() {
+        let (host, port) = parse_addr("[::1]:22").unwrap();
+        assert_eq!(host, "[::1]");
+        assert_eq!(port, 22);
+    }
+
+    #[test]
+    fn engine_new() {
+        let engine = SshEngine::new();
+        assert!(engine.host_key_cb.is_none());
+    }
+
+    #[test]
+    fn engine_with_callback() {
+        let cb: HostKeyCallback = Arc::new(|_h, _p, _t, _f| true);
+        let engine = SshEngine::new().with_host_key_cb(cb);
+        assert!(engine.host_key_cb.is_some());
+    }
+}

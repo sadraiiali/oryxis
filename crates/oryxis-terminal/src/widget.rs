@@ -322,7 +322,7 @@ where
         bounds: Rectangle,
         _cursor: mouse::Cursor,
     ) -> Vec<Geometry> {
-        let mut state = self.state.lock().unwrap();
+        let mut state = self.state.lock().expect("terminal state lock poisoned");
 
         // Auto-resize
         let (new_cols, new_rows) = TerminalView::grid_size_for(bounds.width, bounds.height);

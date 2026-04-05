@@ -3,6 +3,11 @@ mod theme;
 
 use iced::{window, Size};
 
+const WINDOW_WIDTH: f32 = 1200.0;
+const WINDOW_HEIGHT: f32 = 750.0;
+const MIN_WIDTH: f32 = 800.0;
+const MIN_HEIGHT: f32 = 500.0;
+
 fn main() -> iced::Result {
     tracing_subscriber::fmt()
         .with_env_filter("oryxis=debug,info")
@@ -19,8 +24,8 @@ fn main() -> iced::Result {
         .subscription(app::Oryxis::subscription)
         .font(iced_fonts::BOOTSTRAP_FONT_BYTES)
         .window(window::Settings {
-            size: Size::new(1200.0, 750.0),
-            min_size: Some(Size::new(800.0, 500.0)),
+            size: Size::new(WINDOW_WIDTH, WINDOW_HEIGHT),
+            min_size: Some(Size::new(MIN_WIDTH, MIN_HEIGHT)),
             icon: icon,
             ..Default::default()
         })

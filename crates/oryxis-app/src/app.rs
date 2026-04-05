@@ -21,8 +21,12 @@ use uuid::Uuid;
 
 use crate::theme::OryxisColors;
 
-// Bootstrap icon helpers are available via iced_fonts::bootstrap::*
-// e.g. iced_fonts::bootstrap::terminal() returns a Text widget
+// Layout constants
+const DEFAULT_TERM_COLS: u32 = 120;
+const DEFAULT_TERM_ROWS: u32 = 40;
+const PANEL_WIDTH: f32 = 420.0;
+const SIDEBAR_WIDTH: f32 = 180.0;
+const CARD_WIDTH: f32 = 220.0;
 
 // ---------------------------------------------------------------------------
 // Types
@@ -30,7 +34,7 @@ use crate::theme::OryxisColors;
 
 /// A terminal tab — either a local shell or an SSH session.
 struct TerminalTab {
-    id: Uuid,
+    _id: Uuid,
     label: String,
     terminal: Arc<Mutex<TerminalState>>,
     /// SSH session handle (None for local shell).
@@ -87,7 +91,6 @@ pub struct Oryxis {
 
     // UI state
     active_view: View,
-    selected_connection: Option<usize>,
 
     // Tabs
     tabs: Vec<TerminalTab>,
@@ -99,7 +102,6 @@ pub struct Oryxis {
     host_panel_error: Option<String>,
 
     // Connection context menu
-    context_menu_open: Option<usize>,  // index of connection with open menu
 
     // Keys
     keys: Vec<SshKey>,
@@ -122,8 +124,6 @@ pub struct Oryxis {
     known_hosts: Vec<oryxis_core::models::known_host::KnownHost>,
     logs: Vec<oryxis_core::models::log_entry::LogEntry>,
 
-    // SSH engine
-    ssh_engine: SshEngine,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -157,7 +157,6 @@ pub enum Message {
     VaultSetup,
 
     // Navigation
-    SelectConnection(usize),
     ChangeView(View),
 
     // Tabs
@@ -183,7 +182,6 @@ pub enum Message {
     EditorSave,
     EditorCancel,
     DeleteConnection(usize),
-    ToggleContextMenu(usize),
 
     // SSH
     ConnectSsh(usize),
@@ -262,13 +260,11 @@ impl Oryxis {
                 connections: Vec::new(),
                 groups: Vec::new(),
                 active_view: View::Dashboard,
-                selected_connection: None,
                 tabs: Vec::new(),
                 active_tab: None,
                 show_host_panel: false,
                 editor_form: ConnectionForm::default(),
                 host_panel_error: None,
-                context_menu_open: None,
                 keys: Vec::new(),
                 show_key_panel: false,
                 key_import_label: String::new(),
@@ -284,7 +280,6 @@ impl Oryxis {
                 snippet_command: String::new(),
                 snippet_editing_id: None,
                 snippet_error: None,
-                ssh_engine: SshEngine::new(),
             },
             Task::none(),
         )
@@ -364,9 +359,6 @@ impl Oryxis {
             }
 
             // -- Navigation --
-            Message::SelectConnection(idx) => {
-                self.selected_connection = Some(idx);
-            }
             Message::ChangeView(view) => {
                 self.active_view = view;
                 self.active_tab = None; // Show grid view, not terminal
@@ -438,7 +430,6 @@ impl Oryxis {
                 if let Some(conn) = self.connections.get(idx) {
                     self.show_host_panel = true;
                     self.host_panel_error = None;
-                    self.context_menu_open = None;
                     self.editor_form = ConnectionForm {
                         label: conn.label.clone(),
                         hostname: conn.hostname.clone(),
@@ -565,20 +556,12 @@ impl Oryxis {
                 self.show_host_panel = false;
                 self.host_panel_error = None;
             }
-            Message::ToggleContextMenu(idx) => {
-                if self.context_menu_open == Some(idx) {
-                    self.context_menu_open = None;
-                } else {
-                    self.context_menu_open = Some(idx);
-                }
-            }
             Message::DeleteConnection(idx) => {
                 if let Some(conn) = self.connections.get(idx) {
                     let id = conn.id;
                     if let Some(vault) = &self.vault {
                         let _ = vault.delete_connection(&id);
-                        self.context_menu_open = None;
-                        self.show_host_panel = false;
+                            self.show_host_panel = false;
                         self.load_data_from_vault();
                     }
                 }
@@ -630,14 +613,14 @@ impl Oryxis {
                         None
                     };
 
-                    match TerminalState::new_no_pty(120, 40) {
+                    match TerminalState::new_no_pty(DEFAULT_TERM_COLS as u16, DEFAULT_TERM_ROWS as u16) {
                         Ok(state) => {
                             let label = conn.label.clone();
                             let terminal = Arc::new(Mutex::new(state));
                             let tab_idx = self.tabs.len();
 
                             self.tabs.push(TerminalTab {
-                                id: Uuid::new_v4(),
+                                _id: Uuid::new_v4(),
                                 label: format!("{} (connecting...)", label),
                                 terminal: Arc::clone(&terminal),
                                 ssh_session: None,
@@ -676,7 +659,7 @@ impl Oryxis {
                                 async move {
                                     let engine = SshEngine::new().with_host_key_cb(host_key_cb);
                                     match engine
-                                        .connect_with_resolver(&conn, password.as_deref(), private_key.as_deref(), 120, 40, resolver.as_ref())
+                                        .connect_with_resolver(&conn, password.as_deref(), private_key.as_deref(), DEFAULT_TERM_COLS, DEFAULT_TERM_ROWS, resolver.as_ref())
                                         .await
                                     {
                                         Ok((session, mut rx)) => {
@@ -893,11 +876,11 @@ impl Oryxis {
             }
 
             Message::OpenLocalShell => {
-                match TerminalState::new(120, 40) {
+                match TerminalState::new(DEFAULT_TERM_COLS as u16, DEFAULT_TERM_ROWS as u16) {
                     Ok((state, rx)) => {
                         let tab_idx = self.tabs.len();
                         self.tabs.push(TerminalTab {
-                            id: Uuid::new_v4(),
+                            _id: Uuid::new_v4(),
                             label: "Local Shell".into(),
                             terminal: Arc::new(Mutex::new(state)),
                             ssh_session: None,
@@ -1281,7 +1264,7 @@ impl Oryxis {
         .width(Length::Fill);
 
         container(sidebar_content)
-            .width(180)
+            .width(SIDEBAR_WIDTH)
             .height(Length::Fill)
             .style(|_| container::Style {
                 background: Some(Background::Color(OryxisColors::BG_SIDEBAR)),
@@ -1366,7 +1349,7 @@ impl Oryxis {
                 ].align_x(iced::Alignment::Center),
             )
             .padding(24)
-            .width(220)
+            .width(CARD_WIDTH)
             .style(|_| container::Style {
                 background: Some(Background::Color(OryxisColors::BG_SURFACE)),
                 border: Border { radius: Radius::from(10.0), color: OryxisColors::BORDER, width: 1.0 },
@@ -1386,7 +1369,7 @@ impl Oryxis {
                         // Pad current row before header
                         if !cards.is_empty() && cards.len() % 3 != 0 {
                             while cards.len() % 3 != 0 {
-                                cards.push(Space::new().width(220).into());
+                                cards.push(Space::new().width(CARD_WIDTH).into());
                             }
                         }
                         cards.push(
@@ -1398,7 +1381,7 @@ impl Oryxis {
                                 ].align_y(iced::Alignment::Center),
                             )
                             .padding(Padding { top: 12.0, right: 0.0, bottom: 4.0, left: 0.0 })
-                            .width(220 * 3 + 12 * 2)
+                            .width(CARD_WIDTH * 3.0 + 12.0 * 2.0)
                             .into(),
                         );
                     }
@@ -1448,7 +1431,7 @@ impl Oryxis {
                 container(card_content).padding(16),
             )
             .on_press(Message::ConnectSsh(idx))
-            .width(220)
+            .width(CARD_WIDTH)
             .style(move |_, status| {
                 let (bg, border_color, border_w) = match status {
                     BtnStatus::Hovered => (OryxisColors::BG_HOVER, OryxisColors::ACCENT, 1.5),
@@ -1477,7 +1460,7 @@ impl Oryxis {
         }
         if !current_row.is_empty() {
             while current_row.len() < 3 {
-                current_row.push(Space::new().width(220).into());
+                current_row.push(Space::new().width(CARD_WIDTH).into());
             }
             grid_rows.push(row(std::mem::take(&mut current_row)).spacing(12).into());
         }
@@ -1591,7 +1574,7 @@ impl Oryxis {
                 .align_x(iced::Alignment::Center),
             )
             .padding(24)
-            .width(220)
+            .width(CARD_WIDTH)
             .style(|_| container::Style {
                 background: Some(Background::Color(OryxisColors::BG_SURFACE)),
                 border: Border { radius: Radius::from(10.0), color: OryxisColors::BORDER, width: 1.0 },
@@ -1630,7 +1613,7 @@ impl Oryxis {
                 ].align_y(iced::Alignment::Center),
             )
             .padding(16)
-            .width(220)
+            .width(CARD_WIDTH)
             .style(|_| container::Style {
                 background: Some(Background::Color(OryxisColors::BG_SURFACE)),
                 border: Border { radius: Radius::from(10.0), color: OryxisColors::BORDER, width: 1.0 },
@@ -1651,7 +1634,7 @@ impl Oryxis {
         }
         if !current_row.is_empty() {
             while current_row.len() < 3 {
-                current_row.push(Space::new().width(220).into());
+                current_row.push(Space::new().width(CARD_WIDTH).into());
             }
             grid_rows.push(row(std::mem::take(&mut current_row)).spacing(12).into());
         }
@@ -1803,7 +1786,7 @@ impl Oryxis {
         .height(Length::Fill);
 
         container(panel_content)
-            .width(340)
+            .width(PANEL_WIDTH)
             .height(Length::Fill)
             .style(|_| container::Style {
                 background: Some(Background::Color(OryxisColors::BG_SIDEBAR)),
@@ -1864,7 +1847,7 @@ impl Oryxis {
                 ].align_x(iced::Alignment::Center),
             )
             .padding(24)
-            .width(220)
+            .width(CARD_WIDTH)
             .style(|_| container::Style {
                 background: Some(Background::Color(OryxisColors::BG_SURFACE)),
                 border: Border { radius: Radius::from(10.0), color: OryxisColors::BORDER, width: 1.0 },
@@ -1913,7 +1896,7 @@ impl Oryxis {
                 .padding(16),
             )
             .on_press(Message::RunSnippet(idx))
-            .width(220)
+            .width(CARD_WIDTH)
             .style(move |_, status| {
                 let (bg, bc, bw) = match status {
                     BtnStatus::Hovered => (OryxisColors::BG_HOVER, OryxisColors::ACCENT, 1.5),
@@ -1941,7 +1924,7 @@ impl Oryxis {
         }
         if !current_row.is_empty() {
             while current_row.len() < 3 {
-                current_row.push(Space::new().width(220).into());
+                current_row.push(Space::new().width(CARD_WIDTH).into());
             }
             grid_rows.push(row(std::mem::take(&mut current_row)).spacing(12).into());
         }
@@ -2050,7 +2033,7 @@ impl Oryxis {
         ].height(Length::Fill);
 
         container(panel_content)
-            .width(340)
+            .width(PANEL_WIDTH)
             .height(Length::Fill)
             .style(|_| container::Style {
                 background: Some(Background::Color(OryxisColors::BG_SIDEBAR)),
@@ -2542,7 +2525,7 @@ impl Oryxis {
         .height(Length::Fill);
 
         container(panel_content)
-            .width(420)
+            .width(PANEL_WIDTH)
             .height(Length::Fill)
             .style(|_| container::Style {
                 background: Some(Background::Color(Color::from_rgb(0.10, 0.11, 0.15))),

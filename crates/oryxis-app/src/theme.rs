@@ -3,6 +3,7 @@ use iced::Color;
 /// Oryxis dark theme colors — inspired by Termius
 pub struct OryxisColors;
 
+#[allow(dead_code)]
 impl OryxisColors {
     // Backgrounds
     pub const BG_PRIMARY: Color = Color::from_rgb(0.09, 0.09, 0.12);      // #17171F
