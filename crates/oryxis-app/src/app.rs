@@ -91,6 +91,7 @@ pub struct Oryxis {
 
     // UI state
     active_view: View,
+    active_group: Option<Uuid>,  // None = root, Some(id) = inside folder
     quick_host_input: String,
 
     // Tabs
@@ -161,6 +162,8 @@ pub enum Message {
     ChangeView(View),
     QuickHostInput(String),
     QuickHostContinue,
+    OpenGroup(Uuid),
+    BackToRoot,
 
     // Tabs
     SelectTab(usize),
@@ -263,6 +266,7 @@ impl Oryxis {
                 connections: Vec::new(),
                 groups: Vec::new(),
                 active_view: View::Dashboard,
+                active_group: None,
                 quick_host_input: String::new(),
                 tabs: Vec::new(),
                 active_tab: None,
@@ -369,6 +373,12 @@ impl Oryxis {
             }
             Message::QuickHostInput(v) => {
                 self.quick_host_input = v;
+            }
+            Message::OpenGroup(gid) => {
+                self.active_group = Some(gid);
+            }
+            Message::BackToRoot => {
+                self.active_group = None;
             }
             Message::QuickHostContinue => {
                 if !self.quick_host_input.is_empty() {
@@ -1408,34 +1418,98 @@ impl Oryxis {
             }
         }
 
-        // Group connections — only show folder headers for grouped connections
-        let mut current_group: Option<Option<Uuid>> = None;
-        for (idx, conn) in self.connections.iter().enumerate() {
-            if current_group.as_ref() != Some(&conn.group_id) {
-                current_group = Some(conn.group_id);
-                // Only show group header if the connection has a group
-                if let Some(gid) = conn.group_id
-                    && let Some(group) = self.groups.iter().find(|g| g.id == gid) {
-                        // Pad current row before header
-                        if !cards.is_empty() && !cards.len().is_multiple_of(3) {
-                            while !cards.len().is_multiple_of(3) {
-                                cards.push(Space::new().width(CARD_WIDTH).into());
-                            }
-                        }
-                        cards.push(
-                            container(
-                                row![
-                                    iced_fonts::bootstrap::folder().size(13).color(OryxisColors::TEXT_MUTED),
-                                    Space::new().width(8),
-                                    text(&group.label).size(13).color(OryxisColors::TEXT_MUTED),
-                                ].align_y(iced::Alignment::Center),
+        // Breadcrumb if inside a folder
+        if let Some(gid) = self.active_group {
+            let group_name = self.groups.iter()
+                .find(|g| g.id == gid)
+                .map(|g| g.label.as_str())
+                .unwrap_or("Group");
+            let breadcrumb = container(
+                row![
+                    button(
+                        row![
+                            iced_fonts::bootstrap::arrow_left().size(12).color(OryxisColors::ACCENT),
+                            Space::new().width(6),
+                            text("All Hosts").size(12).color(OryxisColors::ACCENT),
+                        ].align_y(iced::Alignment::Center),
+                    )
+                    .on_press(Message::BackToRoot)
+                    .padding(Padding { top: 4.0, right: 10.0, bottom: 4.0, left: 10.0 })
+                    .style(|_, _| button::Style {
+                        background: Some(Background::Color(Color::TRANSPARENT)),
+                        border: Border::default(),
+                        ..Default::default()
+                    }),
+                    text("/").size(14).color(OryxisColors::TEXT_MUTED),
+                    Space::new().width(8),
+                    iced_fonts::bootstrap::folder_fill().size(14).color(OryxisColors::ACCENT),
+                    Space::new().width(6),
+                    text(group_name).size(14).color(OryxisColors::TEXT_PRIMARY),
+                ].align_y(iced::Alignment::Center),
+            )
+            .padding(Padding { top: 0.0, right: 24.0, bottom: 8.0, left: 24.0 });
+            cards.push(
+                container(breadcrumb).width(CARD_WIDTH * 3.0 + 12.0 * 2.0).into()
+            );
+        }
+
+        if self.active_group.is_none() {
+            // Root view: show folder cards for groups that have connections
+            let mut shown_groups = std::collections::HashSet::new();
+            for conn in &self.connections {
+                if let Some(gid) = conn.group_id {
+                    if shown_groups.insert(gid) {
+                        if let Some(group) = self.groups.iter().find(|g| g.id == gid) {
+                            let count = self.connections.iter().filter(|c| c.group_id == Some(gid)).count();
+                            let label = group.label.clone();
+                            let count_text = format!("{} host{}", count, if count != 1 { "s" } else { "" });
+
+                            // Folder card with "stacked" effect
+                            let folder_card = button(
+                                container(
+                                    column![
+                                        row![
+                                            iced_fonts::bootstrap::folder_fill().size(20).color(OryxisColors::ACCENT),
+                                            Space::new().width(Length::Fill),
+                                            text(count_text).size(11).color(OryxisColors::TEXT_MUTED),
+                                        ].align_y(iced::Alignment::Center),
+                                        Space::new().height(10),
+                                        text(label).size(14).color(OryxisColors::TEXT_PRIMARY),
+                                    ],
+                                )
+                                .padding(16),
                             )
-                            .padding(Padding { top: 12.0, right: 0.0, bottom: 4.0, left: 0.0 })
-                            .width(CARD_WIDTH * 3.0 + 12.0 * 2.0)
-                            .into(),
-                        );
+                            .on_press(Message::OpenGroup(gid))
+                            .width(CARD_WIDTH)
+                            .style(|_, status| {
+                                let (bg, bc, bw) = match status {
+                                    BtnStatus::Hovered => (OryxisColors::BG_HOVER, OryxisColors::ACCENT, 1.5),
+                                    BtnStatus::Pressed => (OryxisColors::BG_SELECTED, OryxisColors::ACCENT, 2.0),
+                                    _ => (OryxisColors::BG_SURFACE, OryxisColors::BORDER, 1.0),
+                                };
+                                button::Style {
+                                    background: Some(Background::Color(bg)),
+                                    border: Border { radius: Radius::from(10.0), color: bc, width: bw },
+                                    ..Default::default()
+                                }
+                            });
+
+                            cards.push(folder_card.into());
+                        }
                     }
+                }
             }
+        }
+
+        // Show host cards — filtered by active group
+        for (idx, conn) in self.connections.iter().enumerate() {
+            // Filter: at root show ungrouped only, inside folder show that group
+            if let Some(gid) = self.active_group {
+                if conn.group_id != Some(gid) { continue; }
+            } else if conn.group_id.is_some() {
+                continue; // hide grouped hosts at root (they're inside folder cards)
+            }
+
             let is_connected = self.tabs.iter().any(|t| t.label == conn.label);
             let auth_label = match conn.auth_method {
                 AuthMethod::Password => "Password",
@@ -1445,7 +1519,6 @@ impl Oryxis {
             };
             let subtitle = format!("{}@{}:{} · {}", conn.username.as_deref().unwrap_or("root"), conn.hostname, conn.port, auth_label);
 
-            // Host icon box
             let icon_color = if is_connected { OryxisColors::SUCCESS } else { OryxisColors::ACCENT };
             let icon_box = container(iced_fonts::bootstrap::hdd_network().size(14).color(Color::WHITE))
                 .padding(Padding { top: 8.0, right: 8.0, bottom: 8.0, left: 8.0 })
@@ -1455,7 +1528,6 @@ impl Oryxis {
                     ..Default::default()
                 });
 
-            // Edit button
             let edit_btn = button(text("...").size(12).color(OryxisColors::TEXT_MUTED))
                 .on_press(Message::EditConnection(idx))
                 .padding(Padding { top: 2.0, right: 6.0, bottom: 2.0, left: 6.0 })
@@ -1465,31 +1537,32 @@ impl Oryxis {
                     ..Default::default()
                 });
 
-            let card_content = row![
-                icon_box,
-                Space::new().width(12),
-                column![
-                    text(&conn.label).size(13).color(OryxisColors::TEXT_PRIMARY),
-                    Space::new().height(2),
-                    text(subtitle).size(10).color(OryxisColors::TEXT_MUTED),
-                ].width(Length::Fill),
-                edit_btn,
-            ].align_y(iced::Alignment::Center);
-
             let card = button(
-                container(card_content).padding(16),
+                container(
+                    row![
+                        icon_box,
+                        Space::new().width(12),
+                        column![
+                            text(&conn.label).size(13).color(OryxisColors::TEXT_PRIMARY),
+                            Space::new().height(2),
+                            text(subtitle).size(10).color(OryxisColors::TEXT_MUTED),
+                        ].width(Length::Fill),
+                        edit_btn,
+                    ].align_y(iced::Alignment::Center),
+                )
+                .padding(16),
             )
             .on_press(Message::ConnectSsh(idx))
             .width(CARD_WIDTH)
             .style(move |_, status| {
-                let (bg, border_color, border_w) = match status {
+                let (bg, bc, bw) = match status {
                     BtnStatus::Hovered => (OryxisColors::BG_HOVER, OryxisColors::ACCENT, 1.5),
                     BtnStatus::Pressed => (OryxisColors::BG_SELECTED, OryxisColors::ACCENT, 2.0),
                     _ => (OryxisColors::BG_SURFACE, OryxisColors::BORDER, 1.0),
                 };
                 button::Style {
                     background: Some(Background::Color(bg)),
-                    border: Border { radius: Radius::from(10.0), color: border_color, width: border_w },
+                    border: Border { radius: Radius::from(10.0), color: bc, width: bw },
                     ..Default::default()
                 }
             });
