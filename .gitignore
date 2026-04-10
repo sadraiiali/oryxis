@@ -5,3 +5,6 @@ claude.md
 .env
 signaling-worker/wrangler.jsonc
 signaling-worker/.wrangler/
+*.pfx
+*.cer
+.wrangler
