@@ -221,16 +221,16 @@ impl Oryxis {
                             tab.chat_history
                                 .iter()
                                 .filter(|m| {
-                                    m.role != ChatRole::Error
-                                        && !(m.role == ChatRole::Assistant
-                                            && m.content.is_empty())
+                                    !(matches!(m.role, ChatRole::Error | ChatRole::PendingTool)
+                                        || (m.role == ChatRole::Assistant
+                                            && m.content.is_empty()))
                                 })
                                 .map(|m| crate::ai::ChatMsg {
                                     role: match m.role {
                                         ChatRole::User => "user".into(),
                                         ChatRole::Assistant => "assistant".into(),
                                         ChatRole::System => "user".into(),
-                                        ChatRole::Error => unreachable!(),
+                                        ChatRole::Error | ChatRole::PendingTool => unreachable!(),
                                     },
                                     content: serde_json::Value::String(m.content.clone()),
                                 }),
@@ -254,8 +254,8 @@ impl Oryxis {
                         )
                         .map(|chunk| match chunk {
                             crate::ai::StreamChunk::Text(t) => Message::ChatStreamChunk(t),
-                            crate::ai::StreamChunk::ToolUse { command } => {
-                                Message::ChatToolExec(command)
+                            crate::ai::StreamChunk::ToolUse { command, risk } => {
+                                Message::ChatToolProposed { command, risk }
                             }
                             crate::ai::StreamChunk::Done => Message::ChatStreamDone,
                             crate::ai::StreamChunk::Error(e) => Message::ChatError(e),
@@ -360,6 +360,102 @@ impl Oryxis {
                     return Ok(Task::done(Message::SendChat));
                 }
             }
+            Message::ChatToolProposed { command, risk } => {
+                // Gate the tool call: safe commands run immediately;
+                // risky ones become a `PendingTool` bubble waiting on
+                // a RUN / ALWAYS RUN / DENY click. The first whitespace
+                // token is matched against the tab's allow-list so the
+                // user's "always run X" decisions stick across the
+                // session.
+                let first_token = command
+                    .split_whitespace()
+                    .next()
+                    .unwrap_or("")
+                    .to_string();
+                let allowed = self
+                    .active_tab
+                    .and_then(|i| self.tabs.get(i))
+                    .map(|tab| {
+                        tab.chat_always_run_commands
+                            .iter()
+                            .any(|c| c == &first_token)
+                    })
+                    .unwrap_or(false);
+                if risk == "safe" || allowed {
+                    return Ok(Task::done(Message::ChatToolExec(command)));
+                }
+                if let Some(idx) = self.active_tab
+                    && let Some(tab) = self.tabs.get_mut(idx)
+                {
+                    // Drop the empty assistant placeholder if the model
+                    // went straight to a tool call without any text.
+                    if let Some(last) = tab.chat_history.last()
+                        && last.role == ChatRole::Assistant
+                        && last.content.is_empty()
+                    {
+                        tab.chat_history.pop();
+                    }
+                    tab.chat_history.push(ChatMessage {
+                        role: ChatRole::PendingTool,
+                        content: command,
+                        timestamp: chrono::Utc::now(),
+                        parsed_md: Vec::new(),
+                    });
+                }
+                self.chat_loading = false;
+                if self.chat_scroll_at_bottom {
+                    return Ok(chat_scroll_to_end());
+                }
+            }
+            Message::ChatToolApprove(command) => {
+                // Pop the pending bubble that triggered this approval.
+                if let Some(idx) = self.active_tab
+                    && let Some(tab) = self.tabs.get_mut(idx)
+                    && let Some(last) = tab.chat_history.last()
+                    && last.role == ChatRole::PendingTool
+                {
+                    tab.chat_history.pop();
+                }
+                return Ok(Task::done(Message::ChatToolExec(command)));
+            }
+            Message::ChatToolApproveAlways(command) => {
+                let first_token = command
+                    .split_whitespace()
+                    .next()
+                    .unwrap_or("")
+                    .to_string();
+                if let Some(idx) = self.active_tab
+                    && let Some(tab) = self.tabs.get_mut(idx)
+                {
+                    if !first_token.is_empty()
+                        && !tab
+                            .chat_always_run_commands
+                            .iter()
+                            .any(|c| c == &first_token)
+                    {
+                        tab.chat_always_run_commands.push(first_token);
+                    }
+                    if let Some(last) = tab.chat_history.last()
+                        && last.role == ChatRole::PendingTool
+                    {
+                        tab.chat_history.pop();
+                    }
+                }
+                return Ok(Task::done(Message::ChatToolExec(command)));
+            }
+            Message::ChatToolDeny(_command) => {
+                // User said no. Drop the pending bubble and stop —
+                // the AI doesn't get a callback; the user can write
+                // their own follow-up if they want a textual answer.
+                if let Some(idx) = self.active_tab
+                    && let Some(tab) = self.tabs.get_mut(idx)
+                    && let Some(last) = tab.chat_history.last()
+                    && last.role == ChatRole::PendingTool
+                {
+                    tab.chat_history.pop();
+                }
+                self.chat_loading = false;
+            }
             Message::ChatToolExec(command) => {
                 // AI requested to execute a command in the terminal
                 if let Some(idx) = self.active_tab
@@ -403,16 +499,16 @@ impl Oryxis {
                             .chat_history
                             .iter()
                             .filter(|m| {
-                                m.role != ChatRole::Error
-                                    && !(m.role == ChatRole::Assistant
-                                        && m.content.is_empty())
+                                !(matches!(m.role, ChatRole::Error | ChatRole::PendingTool)
+                                    || (m.role == ChatRole::Assistant
+                                        && m.content.is_empty()))
                             })
                             .map(|m| crate::ai::ChatMsg {
                                 role: match m.role {
                                     ChatRole::User => "user".into(),
                                     ChatRole::Assistant => "assistant".into(),
                                     ChatRole::System => "user".into(),
-                                    ChatRole::Error => unreachable!(),
+                                    ChatRole::Error | ChatRole::PendingTool => unreachable!(),
                                 },
                                 content: serde_json::Value::String(m.content.clone()),
                             })
@@ -501,7 +597,9 @@ impl Oryxis {
                         let stream = tokio_stream::wrappers::UnboundedReceiverStream::new(rx);
                         return Ok(Task::stream(stream).map(|chunk| match chunk {
                             crate::ai::StreamChunk::Text(t) => Message::ChatStreamChunk(t),
-                            crate::ai::StreamChunk::ToolUse { command } => Message::ChatToolExec(command),
+                            crate::ai::StreamChunk::ToolUse { command, risk } => {
+                                Message::ChatToolProposed { command, risk }
+                            }
                             crate::ai::StreamChunk::Done => Message::ChatStreamDone,
                             crate::ai::StreamChunk::Error(e) => Message::ChatError(e),
                         }));

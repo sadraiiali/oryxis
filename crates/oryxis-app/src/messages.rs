@@ -384,6 +384,20 @@ pub enum Message {
     /// error bubble. Pops the most recent error and replays.
     ChatRetry,
     ChatToolExec(String),
+    /// AI proposed a tool call. Carries the command + `risk` it
+    /// self-classified ("safe" / "risky"). Safe commands are executed
+    /// immediately via `ChatToolExec`; risky ones (and ones the model
+    /// failed to classify) are queued as a `PendingTool` bubble with
+    /// RUN / ALWAYS RUN / DENY buttons.
+    ChatToolProposed { command: String, risk: String },
+    /// User clicked RUN on a pending tool prompt — execute once.
+    ChatToolApprove(String),
+    /// User clicked ALWAYS RUN — add this command's first token to the
+    /// tab's allow-list and execute now.
+    ChatToolApproveAlways(String),
+    /// User clicked DENY on a pending tool prompt — drop the bubble,
+    /// don't run anything, don't notify the model.
+    ChatToolDeny(String),
     #[allow(dead_code)]
     ChatToolResult(String),
 

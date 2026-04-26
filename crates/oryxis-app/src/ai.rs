@@ -152,16 +152,21 @@ pub struct ChatMsg {
 fn bash_tool() -> serde_json::Value {
     serde_json::json!({
         "name": "execute_command",
-        "description": "Execute a bash command in the connected terminal session. The command will be typed into the terminal and executed. Returns the output.",
+        "description": "Execute a bash command in the connected terminal session. The command will be typed into the terminal and executed. Returns the output. You MUST classify the command's `risk` correctly so the user only gets prompted on potentially destructive ones.",
         "input_schema": {
             "type": "object",
             "properties": {
                 "command": {
                     "type": "string",
                     "description": "The bash command to execute"
+                },
+                "risk": {
+                    "type": "string",
+                    "enum": ["safe", "risky"],
+                    "description": "Classify the command. `safe` = read-only / introspection (ls, cat, df, du, ps, top, uname, which, grep, find without -delete, head/tail, stat, free, uptime, id, whoami, env, pwd, history). `risky` = anything that writes, deletes, modifies state, escalates privileges, hits the network with side effects, restarts services, edits configs, or runs as root/sudo. When unsure, choose `risky`."
                 }
             },
-            "required": ["command"]
+            "required": ["command", "risk"]
         }
     })
 }
@@ -175,8 +180,13 @@ fn bash_tool() -> serde_json::Value {
 pub enum StreamChunk {
     /// Append this slice to the current assistant message.
     Text(String),
-    /// Model committed to running the bash tool with this command.
-    ToolUse { command: String },
+    /// Model committed to running the bash tool. `command` is the
+    /// bash to execute; `risk` is the model's self-classification
+    /// (`safe` for read-only / introspection, `risky` for anything
+    /// that mutates state). The dispatch handler uses `risk` to
+    /// decide whether to auto-execute or surface a confirmation
+    /// prompt to the user.
+    ToolUse { command: String, risk: String },
     /// Stream completed cleanly. No more chunks will follow.
     Done,
     /// Provider/network error. User-facing message; stream stops here.
@@ -352,8 +362,13 @@ async fn stream_anthropic(
                     if let Some(cmd) = parsed["command"].as_str()
                         && !tool_emitted
                     {
+                        let risk = parsed["risk"]
+                            .as_str()
+                            .unwrap_or("risky")
+                            .to_string();
                         let _ = tx.send(StreamChunk::ToolUse {
                             command: cmd.to_string(),
+                            risk,
                         });
                         tool_emitted = true;
                     }
@@ -393,16 +408,21 @@ async fn stream_openai_at(
         "type": "function",
         "function": {
             "name": "execute_command",
-            "description": "Execute a bash command in the connected terminal session.",
+            "description": "Execute a bash command in the connected terminal session. You MUST classify `risk` correctly so destructive commands get user confirmation.",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "command": {
                         "type": "string",
                         "description": "The bash command to execute"
+                    },
+                    "risk": {
+                        "type": "string",
+                        "enum": ["safe", "risky"],
+                        "description": "`safe` = read-only (ls, cat, df, du, ps, top, uname, which, grep, find without -delete, head/tail, stat, free, uptime, id, whoami, env, pwd, history). `risky` = writes / deletes / modifies state / sudo / restarts services / network side effects. When unsure, choose `risky`."
                     }
                 },
-                "required": ["command"]
+                "required": ["command", "risk"]
             }
         }
     }]);
@@ -469,8 +489,13 @@ async fn stream_openai_at(
                     let parsed: serde_json::Value =
                         serde_json::from_str(json).unwrap_or_default();
                     if let Some(cmd) = parsed["command"].as_str() {
+                        let risk = parsed["risk"]
+                            .as_str()
+                            .unwrap_or("risky")
+                            .to_string();
                         let _ = tx.send(StreamChunk::ToolUse {
                             command: cmd.to_string(),
+                            risk,
                         });
                         tool_emitted = true;
                         break;
@@ -510,13 +535,18 @@ async fn stream_gemini(
         "tools": [{
             "functionDeclarations": [{
                 "name": "execute_command",
-                "description": "Execute a bash command in the connected terminal session.",
+                "description": "Execute a bash command in the connected terminal session. You MUST classify `risk` correctly so destructive commands get user confirmation.",
                 "parameters": {
                     "type": "OBJECT",
                     "properties": {
-                        "command": { "type": "STRING", "description": "The bash command to execute" }
+                        "command": { "type": "STRING", "description": "The bash command to execute" },
+                        "risk": {
+                            "type": "STRING",
+                            "enum": ["safe", "risky"],
+                            "description": "`safe` for read-only (ls, cat, df, du, ps, grep, etc.); `risky` for writes / deletes / sudo / restarts / network side effects. When unsure, `risky`."
+                        }
                     },
-                    "required": ["command"]
+                    "required": ["command", "risk"]
                 }
             }]
         }]
@@ -569,8 +599,13 @@ async fn stream_gemini(
                 && !tool_emitted
                 && let Some(cmd) = fc["args"]["command"].as_str()
             {
+                let risk = fc["args"]["risk"]
+                    .as_str()
+                    .unwrap_or("risky")
+                    .to_string();
                 let _ = tx.send(StreamChunk::ToolUse {
                     command: cmd.to_string(),
+                    risk,
                 });
                 tool_emitted = true;
             }

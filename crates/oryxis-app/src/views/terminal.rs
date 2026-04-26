@@ -442,6 +442,110 @@ impl Oryxis {
                     .align_x(iced::alignment::Horizontal::Left)
                     .into()
             }
+            ChatRole::PendingTool => {
+                // AI proposed a `risky` command — show it inline with
+                // RUN / ALWAYS RUN / DENY buttons. Warning-tinted
+                // surface so the user notices it's an action prompt,
+                // not a regular message.
+                let cmd = msg.content.clone();
+                let cmd_for_run = cmd.clone();
+                let cmd_for_always = cmd.clone();
+                let cmd_for_deny = cmd.clone();
+                let warning_subtle = Color {
+                    a: 0.12,
+                    ..OryxisColors::t().warning
+                };
+                let warning_border = Color {
+                    a: 0.45,
+                    ..OryxisColors::t().warning
+                };
+                let bubble = container(
+                    iced::widget::column![
+                        iced::widget::row![
+                            iced_fonts::lucide::triangle_alert()
+                                .size(13)
+                                .color(OryxisColors::t().warning),
+                            iced::widget::Space::new().width(6),
+                            text("AI wants to run a command")
+                                .size(12)
+                                .font(iced::Font {
+                                    weight: iced::font::Weight::Semibold,
+                                    ..iced::Font::with_name(
+                                        crate::theme::SYSTEM_UI_FAMILY
+                                    )
+                                })
+                                .color(OryxisColors::t().text_primary),
+                        ]
+                        .align_y(iced::Alignment::Center),
+                        iced::widget::Space::new().height(6),
+                        container(
+                            text(cmd.clone())
+                                .size(12)
+                                .font(iced::Font::with_name("Source Code Pro"))
+                                .color(OryxisColors::t().text_primary),
+                        )
+                        .padding(Padding {
+                            top: 6.0,
+                            right: 8.0,
+                            bottom: 6.0,
+                            left: 8.0,
+                        })
+                        .width(Length::Fill)
+                        .style(|_| container::Style {
+                            background: Some(Background::Color(
+                                OryxisColors::t().bg_surface,
+                            )),
+                            border: Border {
+                                radius: Radius::from(6.0),
+                                ..Default::default()
+                            },
+                            ..Default::default()
+                        }),
+                        iced::widget::Space::new().height(8),
+                        iced::widget::row![
+                            crate::widgets::styled_button(
+                                "Run",
+                                Message::ChatToolApprove(cmd_for_run),
+                                OryxisColors::t().accent,
+                            ),
+                            iced::widget::Space::new().width(8),
+                            crate::widgets::styled_button(
+                                "Always run",
+                                Message::ChatToolApproveAlways(cmd_for_always),
+                                OryxisColors::t().success,
+                            ),
+                            iced::widget::Space::new().width(Length::Fill),
+                            crate::widgets::styled_button(
+                                "Deny",
+                                Message::ChatToolDeny(cmd_for_deny),
+                                OryxisColors::t().bg_hover,
+                            ),
+                        ]
+                        .align_y(iced::Alignment::Center),
+                    ],
+                )
+                .padding(Padding {
+                    top: 10.0,
+                    right: 12.0,
+                    bottom: 10.0,
+                    left: 12.0,
+                })
+                .width(Length::Fill)
+                .style(move |_| container::Style {
+                    background: Some(Background::Color(warning_subtle)),
+                    border: Border {
+                        radius: Radius::from(12.0),
+                        color: warning_border,
+                        width: 1.0,
+                    },
+                    ..Default::default()
+                });
+
+                container(bubble)
+                    .width(Length::Fill)
+                    .align_x(iced::alignment::Horizontal::Left)
+                    .into()
+            }
             ChatRole::Error => {
                 // Distinct error treatment: red-tinted border, alert
                 // icon, "Retry" button. Stops a transient API blip from

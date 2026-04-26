@@ -407,6 +407,12 @@ pub(crate) enum ChatRole {
     /// Provider/network error — rendered as a red banner with a Retry
     /// button instead of looking like a normal assistant response.
     Error,
+    /// AI requested a `risky` tool call. `content` carries the proposed
+    /// command verbatim. The view renders RUN / ALWAYS RUN / DENY
+    /// buttons; clicking RUN or ALWAYS RUN converts this into the
+    /// regular tool-execution flow. Safe commands skip this state and
+    /// run immediately.
+    PendingTool,
 }
 
 /// A single message in the AI chat sidebar.
@@ -469,6 +475,12 @@ pub(crate) struct TerminalTab {
     pub chat_history: Vec<ChatMessage>,
     /// Whether the AI chat sidebar is visible.
     pub chat_visible: bool,
+    /// First-token allow-list for AI tool execution. Populated when the
+    /// user clicks "ALWAYS RUN" on a confirmation prompt — future tool
+    /// calls whose first whitespace-delimited token matches an entry
+    /// here skip the prompt and run immediately. Per-tab so an
+    /// "always run rm" decision on one host doesn't leak to others.
+    pub chat_always_run_commands: Vec<String>,
 }
 
 impl TerminalTab {
@@ -488,6 +500,7 @@ impl TerminalTab {
             focused_pane: 0,
             chat_history: Vec::new(),
             chat_visible: false,
+            chat_always_run_commands: Vec::new(),
         }
     }
 
