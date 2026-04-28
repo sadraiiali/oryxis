@@ -6,6 +6,17 @@ project uses [SemVer](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.5.5] - 2026-04-28
+
+### Fixed
+- **winget validation failed with `STATUS_DLL_NOT_FOUND` (0xC0000135)**
+  on `oryxis.exe` and `oryxis-mcp.exe` — the MSVC toolchain dynamically
+  linked the binaries against `vcruntime140.dll` / `msvcp140.dll`, which
+  the winget validation sandbox doesn't ship. Switched Windows builds to
+  static-link the C runtime via `.cargo/config.toml`
+  (`-C target-feature=+crt-static` for `cfg(target_env = "msvc")`), so
+  the binaries no longer depend on VC++ Redistributable being installed.
+
 ## [0.5.4] - 2026-04-28
 
 ### Fixed

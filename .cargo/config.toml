@@ -1,0 +1,6 @@
+# Static-link the MSVC C runtime so Windows binaries don't depend on
+# vcruntime140.dll / msvcp140.dll being present. Without this the winget
+# sandbox validator fails with STATUS_DLL_NOT_FOUND (0xC0000135) on
+# machines without VC++ Redistributable installed.
+[target.'cfg(target_env = "msvc")']
+rustflags = ["-C", "target-feature=+crt-static"]
