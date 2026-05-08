@@ -334,6 +334,10 @@ fn en(key: &str) -> &'static str {
         "switch_tab" => "Switch to Tab 1-9",
         "open_local" => "Open Local Terminal",
         "new_host_shortcut" => "New Host",
+        "font_zoom_in" => "Increase Font Size",
+        "font_zoom_out" => "Decrease Font Size",
+        "font_zoom_reset" => "Reset Font Size",
+        "font_zoom_wheel" => "Adjust Font Size",
         "keyboard_shortcuts" => "Keyboard Shortcuts",
 
         // Session logs
@@ -781,6 +785,10 @@ fn pt_br(key: &str) -> Option<&'static str> {
         "switch_tab" => "Alternar para Aba 1-9",
         "open_local" => "Abrir Terminal Local",
         "new_host_shortcut" => "Novo Host",
+        "font_zoom_in" => "Aumentar Fonte",
+        "font_zoom_out" => "Diminuir Fonte",
+        "font_zoom_reset" => "Resetar Fonte",
+        "font_zoom_wheel" => "Ajustar Fonte",
         "keyboard_shortcuts" => "Atalhos de Teclado",
 
         "session_logs" => "Logs de Sessão",
@@ -1200,6 +1208,10 @@ fn es(key: &str) -> Option<&'static str> {
         "switch_tab" => "Cambiar a Pestaña 1-9",
         "open_local" => "Abrir Terminal Local",
         "new_host_shortcut" => "Nuevo Host",
+        "font_zoom_in" => "Aumentar Fuente",
+        "font_zoom_out" => "Disminuir Fuente",
+        "font_zoom_reset" => "Restablecer Fuente",
+        "font_zoom_wheel" => "Ajustar Fuente",
         "keyboard_shortcuts" => "Atajos de Teclado",
 
         "session_logs" => "Registros de Sesión",
@@ -1598,6 +1610,10 @@ fn fr(key: &str) -> Option<&'static str> {
         "switch_tab" => "Basculer vers l'Onglet 1-9",
         "open_local" => "Ouvrir un Terminal Local",
         "new_host_shortcut" => "Nouvel Hôte",
+        "font_zoom_in" => "Augmenter la Police",
+        "font_zoom_out" => "Diminuer la Police",
+        "font_zoom_reset" => "Réinitialiser la Police",
+        "font_zoom_wheel" => "Ajuster la Police",
         "keyboard_shortcuts" => "Raccourcis Clavier",
 
         "session_logs" => "Journaux de Session",
@@ -1996,6 +2012,10 @@ fn de(key: &str) -> Option<&'static str> {
         "switch_tab" => "Zu Tab 1-9 wechseln",
         "open_local" => "Lokales Terminal öffnen",
         "new_host_shortcut" => "Neuer Host",
+        "font_zoom_in" => "Schrift Vergrößern",
+        "font_zoom_out" => "Schrift Verkleinern",
+        "font_zoom_reset" => "Schrift Zurücksetzen",
+        "font_zoom_wheel" => "Schrift Anpassen",
         "keyboard_shortcuts" => "Tastenkürzel",
 
         "session_logs" => "Sitzungsprotokolle",
@@ -2394,6 +2414,10 @@ fn it(key: &str) -> Option<&'static str> {
         "switch_tab" => "Passa alla Scheda 1-9",
         "open_local" => "Apri Terminale Locale",
         "new_host_shortcut" => "Nuovo Host",
+        "font_zoom_in" => "Aumenta Carattere",
+        "font_zoom_out" => "Diminuisci Carattere",
+        "font_zoom_reset" => "Reimposta Carattere",
+        "font_zoom_wheel" => "Regola Carattere",
         "keyboard_shortcuts" => "Scorciatoie da Tastiera",
 
         "session_logs" => "Registri di Sessione",
@@ -2792,6 +2816,10 @@ fn zh(key: &str) -> Option<&'static str> {
         "switch_tab" => "切换到标签页 1-9",
         "open_local" => "打开本地终端",
         "new_host_shortcut" => "新建主机",
+        "font_zoom_in" => "增大字号",
+        "font_zoom_out" => "减小字号",
+        "font_zoom_reset" => "重置字号",
+        "font_zoom_wheel" => "调整字号",
         "keyboard_shortcuts" => "键盘快捷键",
 
         "session_logs" => "会话日志",
@@ -3190,6 +3218,10 @@ fn ja(key: &str) -> Option<&'static str> {
         "switch_tab" => "タブ1-9に切り替え",
         "open_local" => "ローカルターミナルを開く",
         "new_host_shortcut" => "新しいホスト",
+        "font_zoom_in" => "フォント拡大",
+        "font_zoom_out" => "フォント縮小",
+        "font_zoom_reset" => "フォントリセット",
+        "font_zoom_wheel" => "フォント調整",
         "keyboard_shortcuts" => "キーボードショートカット",
 
         "session_logs" => "セッションログ",
@@ -3588,6 +3620,10 @@ fn ru(key: &str) -> Option<&'static str> {
         "switch_tab" => "Переключить на вкладку 1-9",
         "open_local" => "Открыть локальный терминал",
         "new_host_shortcut" => "Новый хост",
+        "font_zoom_in" => "Увеличить шрифт",
+        "font_zoom_out" => "Уменьшить шрифт",
+        "font_zoom_reset" => "Сбросить шрифт",
+        "font_zoom_wheel" => "Изменить шрифт",
         "keyboard_shortcuts" => "Горячие клавиши",
 
         "session_logs" => "Журналы сеансов",
@@ -4016,6 +4052,10 @@ fn fa(key: &str) -> Option<&'static str> {
         "switch_tab" => "رفتن به برگه ۱ تا ۹",
         "open_local" => "باز کردن ترمینال محلی",
         "new_host_shortcut" => "میزبان جدید",
+        "font_zoom_in" => "بزرگ‌تر کردن فونت",
+        "font_zoom_out" => "کوچک‌تر کردن فونت",
+        "font_zoom_reset" => "بازنشانی فونت",
+        "font_zoom_wheel" => "تنظیم اندازه فونت",
         "keyboard_shortcuts" => "میانبرهای صفحه‌کلید",
 
         // Session logs
@@ -4466,6 +4506,10 @@ fn ar(key: &str) -> Option<&'static str> {
         "switch_tab" => "الانتقال إلى التبويب من ١ إلى ٩",
         "open_local" => "فتح طرفية محلية",
         "new_host_shortcut" => "مضيف جديد",
+        "font_zoom_in" => "تكبير حجم الخط",
+        "font_zoom_out" => "تصغير حجم الخط",
+        "font_zoom_reset" => "إعادة ضبط حجم الخط",
+        "font_zoom_wheel" => "تعديل حجم الخط",
         "keyboard_shortcuts" => "اختصارات لوحة المفاتيح",
 
         // Session logs

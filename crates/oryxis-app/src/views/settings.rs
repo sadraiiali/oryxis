@@ -757,6 +757,10 @@ impl Oryxis {
                     (vec!["Ctrl", "1...9"], crate::i18n::t("switch_tab")),
                     (vec!["Ctrl", "L"], crate::i18n::t("open_local")),
                     (vec!["Ctrl", "N"], crate::i18n::t("new_host_shortcut")),
+                    (vec!["Ctrl", "="], crate::i18n::t("font_zoom_in")),
+                    (vec!["Ctrl", "-"], crate::i18n::t("font_zoom_out")),
+                    (vec!["Ctrl", "0"], crate::i18n::t("font_zoom_reset")),
+                    (vec!["Ctrl", "Wheel"], crate::i18n::t("font_zoom_wheel")),
                 ];
 
                 let mut rows_col = column![
