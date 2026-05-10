@@ -7,3 +7,5 @@ signaling-worker/.wrangler/
 winget/
 .wrangler
 site
+
+ROADMAP-0.6.md
