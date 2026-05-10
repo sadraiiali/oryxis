@@ -160,6 +160,7 @@ impl Oryxis {
                                 tab_idx,
                             });
                             self.active_tab = Some(tab_idx);
+                            self.remember_terminal_tab_focus(tab_idx);
 
                             // Host key verification: check callback + ask channel
                             let known_hosts_snapshot: Arc<Mutex<Vec<oryxis_core::models::known_host::KnownHost>>> =
@@ -788,6 +789,7 @@ impl Oryxis {
                     let tab_idx = progress.tab_idx;
                     if tab_idx < self.tabs.len() {
                         self.tabs.remove(tab_idx);
+                        self.adjust_last_terminal_tab_after_remove(tab_idx);
                     }
                 }
                 self.connecting = None;
@@ -801,6 +803,7 @@ impl Oryxis {
                     self.connecting = None;
                     if tab_idx < self.tabs.len() {
                         self.tabs.remove(tab_idx);
+                        self.adjust_last_terminal_tab_after_remove(tab_idx);
                     }
                     self.active_tab = None;
                     self.active_view = View::Dashboard;
@@ -814,6 +817,7 @@ impl Oryxis {
                     self.connecting = None;
                     if tab_idx < self.tabs.len() {
                         self.tabs.remove(tab_idx);
+                        self.adjust_last_terminal_tab_after_remove(tab_idx);
                     }
                     self.active_tab = None;
                     return Ok(self.update(Message::ConnectSsh(idx)));

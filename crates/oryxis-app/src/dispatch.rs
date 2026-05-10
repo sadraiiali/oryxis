@@ -261,14 +261,15 @@ impl Oryxis {
             Message::RunSnippet(idx) => {
                 if let Some(snip) = self.snippets.get(idx) {
                     let cmd = format!("{}\n", snip.command);
-                    if let Some(tab_idx) = self.active_tab
-                        && let Some(tab) = self.tabs.get(tab_idx) {
-                            if let Some(ref ssh) = tab.active().ssh_session {
-                                let _ = ssh.write(cmd.as_bytes());
-                            } else if let Ok(mut state) = tab.active().terminal.lock() {
-                                state.write(cmd.as_bytes());
-                            }
+                    if let Some(tab_idx) = self.snippet_injection_tab()
+                        && let Some(tab) = self.tabs.get(tab_idx)
+                    {
+                        if let Some(ref ssh) = tab.active().ssh_session {
+                            let _ = ssh.write(cmd.as_bytes());
+                        } else if let Ok(mut state) = tab.active().terminal.lock() {
+                            state.write(cmd.as_bytes());
                         }
+                    }
                 }
             }
 

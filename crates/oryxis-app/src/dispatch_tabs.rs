@@ -211,6 +211,7 @@ impl Oryxis {
             Message::SelectTab(idx) => {
                 if idx < self.tabs.len() {
                     self.active_tab = Some(idx);
+                    self.remember_terminal_tab_focus(idx);
                     self.active_view = View::Terminal;
                     return Ok(self.tab_scroll_to_active());
                 }
@@ -330,11 +331,14 @@ impl Oryxis {
                 self.overlay = None;
                 if idx < self.tabs.len() {
                     self.tabs.remove(idx);
+                    self.adjust_last_terminal_tab_after_remove(idx);
                     if self.tabs.is_empty() {
                         self.active_tab = None;
                         self.active_view = View::Dashboard;
                     } else {
-                        self.active_tab = Some(idx.min(self.tabs.len() - 1));
+                        let i = idx.min(self.tabs.len() - 1);
+                        self.active_tab = Some(i);
+                        self.remember_terminal_tab_focus(i);
                     }
                 }
             }
@@ -354,11 +358,14 @@ impl Oryxis {
                     let base_label = tab.label.trim_end_matches(" (disconnected)").to_string();
                     let conn_idx = self.connections.iter().position(|c| c.label == base_label);
                     self.tabs.remove(idx);
+                    self.adjust_last_terminal_tab_after_remove(idx);
                     if self.tabs.is_empty() {
                         self.active_tab = None;
                         self.active_view = View::Dashboard;
                     } else {
-                        self.active_tab = Some(idx.min(self.tabs.len() - 1));
+                        let i = idx.min(self.tabs.len() - 1);
+                        self.active_tab = Some(i);
+                        self.remember_terminal_tab_focus(i);
                     }
                     if let Some(ci) = conn_idx {
                         // Toast "Reconnecting..." so the user sees feedback the
@@ -538,12 +545,14 @@ impl Oryxis {
                     self.tabs.clear();
                     self.tabs.push(keep);
                     self.active_tab = Some(0);
+                    self.remember_terminal_tab_focus(0);
                 }
             }
             Message::CloseAllTabs => {
                 self.overlay = None;
                 self.tabs.clear();
                 self.active_tab = None;
+                self.clear_terminal_tab_memory();
                 self.active_view = View::Dashboard;
             }
 

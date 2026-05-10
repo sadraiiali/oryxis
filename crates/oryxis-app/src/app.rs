@@ -96,6 +96,9 @@ pub struct Oryxis {
     // Tabs
     pub(crate) tabs: Vec<TerminalTab>,
     pub(crate) active_tab: Option<usize>,
+    /// Last terminal tab that had focus. Preserved when switching to nav-only
+    /// views (Snippets, Keys, …) so snippet injection still targets that session.
+    pub(crate) last_terminal_tab: Option<usize>,
     pub(crate) hovered_tab: Option<usize>,
     pub(crate) show_new_tab_picker: bool,
     pub(crate) new_tab_picker_search: String,
@@ -516,6 +519,36 @@ pub struct Oryxis {
 // `boot`, `load_data_from_vault`, `persist_setting` live in `crate::boot`.
 
 impl Oryxis {
+    pub(crate) fn snippet_injection_tab(&self) -> Option<usize> {
+        let idx = self.active_tab.or(self.last_terminal_tab)?;
+        (idx < self.tabs.len()).then_some(idx)
+    }
+
+    pub(crate) fn remember_terminal_tab_focus(&mut self, idx: usize) {
+        if idx < self.tabs.len() {
+            self.last_terminal_tab = Some(idx);
+        }
+    }
+
+    pub(crate) fn adjust_last_terminal_tab_after_remove(&mut self, removed_idx: usize) {
+        if self.tabs.is_empty() {
+            self.last_terminal_tab = None;
+            return;
+        }
+        match self.last_terminal_tab {
+            Some(l) if l == removed_idx => {
+                self.last_terminal_tab = Some(removed_idx.min(self.tabs.len() - 1));
+            }
+            Some(l) if l > removed_idx => {
+                self.last_terminal_tab = Some(l - 1);
+            }
+            _ => {}
+        }
+    }
+
+    pub(crate) fn clear_terminal_tab_memory(&mut self) {
+        self.last_terminal_tab = None;
+    }
 
     pub fn title(&self) -> String {
         "Oryxis".into()

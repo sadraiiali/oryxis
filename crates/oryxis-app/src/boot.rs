@@ -90,6 +90,7 @@ impl Oryxis {
                 sidebar_collapsed: false,
                 tabs: Vec::new(),
                 active_tab: None,
+                last_terminal_tab: None,
                 hovered_tab: None,
                 show_new_tab_picker: false,
                 new_tab_picker_search: String::new(),

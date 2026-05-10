@@ -375,6 +375,7 @@ impl Oryxis {
                         self.groups.clear();
                         self.tabs.clear();
                         self.active_tab = None;
+                        self.clear_terminal_tab_memory();
                         self.active_view = View::Dashboard;
                     } else {
                         // No user password: re-open immediately
@@ -464,6 +465,7 @@ fn spawn_local_shell(
                 Arc::new(Mutex::new(state)),
             ));
             app.active_tab = Some(tab_idx);
+            app.remember_terminal_tab_focus(tab_idx);
             app.active_view = View::Terminal;
             let stream = UnboundedReceiverStream::new(rx);
             Task::batch(vec![

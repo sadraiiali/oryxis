@@ -135,6 +135,7 @@ impl Oryxis {
                     Arc::new(Mutex::new(state)),
                 ));
                 self.active_tab = Some(tab_idx);
+                self.remember_terminal_tab_focus(tab_idx);
                 self.active_view = View::Terminal;
                 let stream = UnboundedReceiverStream::new(rx);
                 Task::batch(vec![
