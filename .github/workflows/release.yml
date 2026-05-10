@@ -208,6 +208,10 @@ jobs:
             -Uri 'https://github.com/GsNSIS/EnVar/releases/download/v0.3.1/EnVar-Plugin.zip' `
             -OutFile $envarZip
           Expand-Archive -Path $envarZip -DestinationPath $envarDir -Force
+          # The choco nsis package doesn't pre-create the per-arch
+          # plugin subdirs, so make sure they exist before copying.
+          New-Item -ItemType Directory -Force -Path 'C:\Program Files (x86)\NSIS\Plugins\amd64-unicode' | Out-Null
+          New-Item -ItemType Directory -Force -Path 'C:\Program Files (x86)\NSIS\Plugins\x86-unicode' | Out-Null
           Copy-Item "$envarDir\Plugins\amd64-unicode\EnVar.dll" 'C:\Program Files (x86)\NSIS\Plugins\amd64-unicode\' -Force
           Copy-Item "$envarDir\Plugins\x86-unicode\EnVar.dll" 'C:\Program Files (x86)\NSIS\Plugins\x86-unicode\' -Force
       - name: Build installers
@@ -278,6 +282,8 @@ jobs:
             -Uri 'https://github.com/GsNSIS/EnVar/releases/download/v0.3.1/EnVar-Plugin.zip' `
             -OutFile $envarZip
           Expand-Archive -Path $envarZip -DestinationPath $envarDir -Force
+          New-Item -ItemType Directory -Force -Path 'C:\Program Files (x86)\NSIS\Plugins\amd64-unicode' | Out-Null
+          New-Item -ItemType Directory -Force -Path 'C:\Program Files (x86)\NSIS\Plugins\x86-unicode' | Out-Null
           Copy-Item "$envarDir\Plugins\amd64-unicode\EnVar.dll" 'C:\Program Files (x86)\NSIS\Plugins\amd64-unicode\' -Force
           Copy-Item "$envarDir\Plugins\x86-unicode\EnVar.dll" 'C:\Program Files (x86)\NSIS\Plugins\x86-unicode\' -Force
       - name: Build installers
