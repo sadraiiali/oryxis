@@ -7,6 +7,20 @@ project uses [SemVer](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Encrypted SSH key import** — The keychain importer now detects
+  passphrase-protected OpenSSH private keys and prompts for the
+  passphrase inline, the way Termius / 1Password handle it. The key
+  is decrypted once at import time and stored unencrypted inside the
+  vault, where the master password's Argon2id + ChaCha20Poly1305
+  layer takes over for at-rest protection — there is no per-key
+  passphrase prompt at connect time. The form auto-detects encryption
+  on file pick (no need to click Save first), shows a "Wrong
+  passphrase. Please try again." error on bad input, and refuses to
+  save with an empty passphrase ("Enter the key passphrase to
+  continue."). PKCS#1/PKCS#8 traditional PEMs that are themselves
+  passphrase-protected aren't supported yet — users get a clear
+  error instructing them to drop the passphrase first
+  (`ssh-keygen -p -f <file> -N ''`).
 - **Windows per-user installer** — `oryxis-user-setup-x86_64.exe` and
   `oryxis-user-setup-aarch64.exe` install Oryxis under
   `%LOCALAPPDATA%\Programs\Oryxis` with `HKCU` registry entries and no
@@ -27,6 +41,40 @@ project uses [SemVer](https://semver.org/spec/v2.0.0.html).
   resolve from any shell — relevant for the MCP server, which
   external clients (Claude Desktop, etc.) typically wire by name.
 
+### Changed
+- **Responsive card grid across all list screens** — Hosts, keys,
+  identities, snippets and cloud accounts swapped their hard-coded
+  3-column tiling for a shared helper that recomputes the column
+  count from the current available width on every render. Cards
+  flex to fill the row (`Length::Fill`) and rewrap when the user
+  resizes the window or opens a side panel — previously the third
+  card just clipped off-screen. Long labels truncate cleanly via
+  `Wrapping::None` + a `clip(true)` container instead of breaking
+  the card geometry.
+- **Standardised card row-actions** — Snippets, keys and identities
+  switched their "edit" / "more" affordance to the same vertical
+  ellipsis (⋮) glyph, 22 px reserved slot, hover-only visibility
+  used by hosts and cloud profile cards. The four card families now
+  read identically.
+- **Split-button dropdowns anchor to the button** — "+ ADD ▼"
+  (keychain) and "+ Host [▾]" (cloud provider picker) now drop
+  below the chevron at a fixed screen position derived from the
+  toolbar geometry, instead of following the cursor. Both menus
+  open in the same spot regardless of where the user clicked.
+- **Overlay menu minimum height** — Single-item dropdowns no longer
+  render shorter than the button they dropped from. A 32 px floor
+  is enforced via a Stack-backed spacer (iced 0.13 has no
+  `min_height` on container).
+- **Settings → Terminal section reordered** — Visual customisations
+  (font size, font, theme) moved to the bottom of the section, with
+  theme last. Behaviour toggles, keepalive, scrollback, reconnect,
+  OS detection and updates come first. The theme picker switched
+  from a single tall column to a 2-column responsive grid; cards
+  keep the swatch-+-name design, just paired side-by-side.
+- **`winget` submission covers both architectures** — the winget
+  manifest now lists both `x86_64` and `aarch64` system installers in
+  a single submission via Komac's PE-header detection.
+
 ### Fixed
 - **Auto-update on Windows failed with "os error 740"** — the updater
   used `CreateProcess` to launch the downloaded NSIS installer, which
@@ -34,11 +82,13 @@ project uses [SemVer](https://semver.org/spec/v2.0.0.html).
   elevated system installer with `ERROR_ELEVATION_REQUIRED`. Updater
   now uses `ShellExecuteW`, letting the manifest control elevation
   (UAC for the system installer, no prompt for the per-user one).
-
-### Changed
-- **`winget` submission covers both architectures** — the winget
-  manifest now lists both `x86_64` and `aarch64` system installers in
-  a single submission via Komac's PE-header detection.
+- **Window resize event flood** — `Message::WindowResized` quantises
+  the incoming size to an 8 px grid before storing. Drag-resize
+  emits ~1 event per pixel; rounding collapses ~7 of every 8 events
+  into the same `window_size` so view()s that depend on it (the new
+  responsive grids) don't reflow on every frame. Reduces pressure
+  on iced's subscription channel and the
+  `TrySendError { kind: Full }` warnings during sustained drag.
 
 ## [0.5.7] - 2026-05-08
 

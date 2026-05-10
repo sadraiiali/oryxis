@@ -154,6 +154,7 @@ Most SSH clients are either powerful but ugly (PuTTY), pretty but Electron-heavy
 - **Autocomplete** — Type in username field to see matching identities, click to link.
 - **Keychain view** — Keys and Identities side by side with search, edit, context menus.
 - **Proxy Identities** — Same shape but for proxy configs (SOCKS5 / HTTP / SOCKS4). Edit once, link from many hosts, password stored encrypted alongside the identity.
+- **Encrypted SSH key import** — Passphrase-protected OpenSSH keys are detected on file pick; the importer prompts inline for the passphrase, decrypts the key once, and stores it unencrypted inside the vault. The vault's master password (Argon2id + ChaCha20Poly1305) takes over for at-rest protection — no per-key passphrase prompt at connect time. Termius / 1Password-style flow.
 
 ### Themes & Internationalization
 - **12 global themes** — Oryxis Dark / Light, Termius, Darcula, Islands Dark, Dracula, Monokai, Hacker Green, Nord, Nord Light, Solarized Light, Paper Light. Changes entire UI instantly.
@@ -199,6 +200,8 @@ Most SSH clients are either powerful but ugly (PuTTY), pretty but Electron-heavy
 ### UI / UX
 - **Native GPU-accelerated UI** — [Iced 0.14](https://iced.rs) (wgpu backend).
 - **Termius-inspired design** — Card grid, slide-in editors, sidebar navigation.
+- **Responsive card grid** — Hosts, keys, identities, snippets and cloud accounts all use the same dynamic grid: column count is recomputed from the available width on every render, cards flex to fill the row (`Length::Fill`), and long labels truncate cleanly via `Wrapping::None` + container `clip(true)` instead of breaking the card geometry. Resizing the window or opening a side panel reflows the grid; the trailing card never clips off-screen.
+- **Standardised card affordances** — Every card family (hosts, keys, identities, snippets, cloud) renders the same vertical-ellipsis (⋮) row-action button: hover-only, 22 px reserved slot, identical hover style. Split-button dropdowns (`+ ADD ▼`, `+ Host [▾]`) anchor below the chevron at a fixed screen position derived from the toolbar geometry, so the menu always opens in the same place regardless of where the click landed.
 - **Folder organization** — Group hosts into folders with breadcrumb navigation.
 - **Search** — Filter hosts and keys by name.
 - **Empty states** — Centered onboarding screens.
