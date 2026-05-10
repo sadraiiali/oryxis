@@ -6,6 +6,40 @@ project uses [SemVer](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- **Windows per-user installer** — `oryxis-user-setup-x86_64.exe` and
+  `oryxis-user-setup-aarch64.exe` install Oryxis under
+  `%LOCALAPPDATA%\Programs\Oryxis` with `HKCU` registry entries and no
+  UAC prompt, mirroring VSCode's user-installer pattern. Useful on
+  locked-down corporate machines and for unattended auto-updates. The
+  per-user setup detects an existing system install side-by-side and
+  warns (does not auto-uninstall). The system installer
+  (`oryxis-setup-*.exe`) keeps its previous behavior; `winget install`
+  continues to target it.
+- **Windows ARM64 installers** — `oryxis-setup-aarch64.exe` (system)
+  and `oryxis-user-setup-aarch64.exe` (per-user) ship alongside the
+  existing portable `.zip`. The installer stub is x86 (NSIS upstream
+  ships no native ARM64 makensis), but the binaries laid down are
+  native ARM64, so the emulation cost applies only during install.
+- **`PATH` registration** — both installer flavors add `INSTDIR` to
+  `HKLM\Environment\Path` (system) or `HKCU\Environment\Path`
+  (per-user) via the EnVar plugin, so `oryxis` and `oryxis-mcp` now
+  resolve from any shell — relevant for the MCP server, which
+  external clients (Claude Desktop, etc.) typically wire by name.
+
+### Fixed
+- **Auto-update on Windows failed with "os error 740"** — the updater
+  used `CreateProcess` to launch the downloaded NSIS installer, which
+  ignores the executable's manifest and refused to launch the
+  elevated system installer with `ERROR_ELEVATION_REQUIRED`. Updater
+  now uses `ShellExecuteW`, letting the manifest control elevation
+  (UAC for the system installer, no prompt for the per-user one).
+
+### Changed
+- **`winget` submission covers both architectures** — the winget
+  manifest now lists both `x86_64` and `aarch64` system installers in
+  a single submission via Komac's PE-header detection.
+
 ## [0.5.7] - 2026-05-08
 
 ### Added
