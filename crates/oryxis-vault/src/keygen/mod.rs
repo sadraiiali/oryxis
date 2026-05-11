@@ -79,8 +79,20 @@ pub fn import_key(
     let private_key = if ppk::is_ppk(trimmed) {
         ppk::parse(trimmed, passphrase)?
     } else if trimmed.contains("BEGIN OPENSSH PRIVATE KEY") {
-        let parsed = PrivateKey::from_openssh(trimmed)
-            .map_err(|e| VaultError::Crypto(format!("Failed to parse OpenSSH key: {}", e)))?;
+        // Try the input as-is first (preserves OpenSSH's native 70-char
+        // wrapping). If that fails with a Base64 error, retry after
+        // rewrapping at 64 chars: PuTTYgen's "Export OpenSSH key (force
+        // new file format)" emits a 76-char body that `ssh-key`'s PEM
+        // decoder rejects with a misleading "invalid Base64 encoding".
+        let parsed = match PrivateKey::from_openssh(trimmed) {
+            Ok(k) => k,
+            Err(first_err) => {
+                let rewrapped = pem::rewrap_pem_body_at(trimmed, 70);
+                PrivateKey::from_openssh(&rewrapped).map_err(|_| {
+                    VaultError::Crypto(format!("Failed to parse OpenSSH key: {}", first_err))
+                })?
+            }
+        };
         if parsed.is_encrypted() {
             let pass = passphrase.unwrap_or("");
             if pass.is_empty() {
@@ -196,6 +208,31 @@ mod tests {
         let generated = generate_ed25519("ws-test").unwrap();
         let padded = format!("\n  {}  \n", generated.private_pem);
         let imported = import_key("trimmed", &padded, None).unwrap();
+        assert_eq!(imported.key.fingerprint, generated.key.fingerprint);
+    }
+
+    #[test]
+    fn import_openssh_with_76_char_lines() {
+        // Mimic PuTTYgen's "Export OpenSSH key (force new file format)"
+        // output: same base64 body, but wrapped at 76 chars instead of
+        // RFC 7468's 64. Used to fail with "invalid Base64 encoding".
+        let generated = generate_ed25519("force-new-format").unwrap();
+        let begin = generated.private_pem.find('\n').unwrap() + 1;
+        let end_tag = "-----END";
+        let end = generated.private_pem.find(end_tag).unwrap();
+        let body: String = generated.private_pem[begin..end]
+            .chars()
+            .filter(|c| !c.is_whitespace())
+            .collect();
+        let mut rewrapped = String::new();
+        rewrapped.push_str(&generated.private_pem[..begin]);
+        for chunk in body.as_bytes().chunks(76) {
+            rewrapped.push_str(std::str::from_utf8(chunk).unwrap());
+            rewrapped.push('\n');
+        }
+        rewrapped.push_str(&generated.private_pem[end..]);
+
+        let imported = import_key("force-new-format", &rewrapped, None).unwrap();
         assert_eq!(imported.key.fingerprint, generated.key.fingerprint);
     }
 

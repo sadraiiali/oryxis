@@ -7,7 +7,14 @@ use crate::store::VaultError;
 /// the 64-char convention (RFC 7468 §3) and rejects OpenSSL's legacy
 /// 76-char wrapping with a misleading "invalid Base64 encoding" error.
 /// Returns the input unchanged if no BEGIN/END envelope is found.
-fn rewrap_pem_body(pem: &str) -> String {
+pub(super) fn rewrap_pem_body(pem: &str) -> String {
+    rewrap_pem_body_at(pem, 64)
+}
+
+/// Same as [`rewrap_pem_body`] but with a configurable line width.
+/// Useful for OpenSSH keys, where `ssh-encoding`'s PEM decoder
+/// requires exactly 70-char lines (not the RFC 7468 default of 64).
+pub(super) fn rewrap_pem_body_at(pem: &str, width: usize) -> String {
     let begin = match pem.find("-----BEGIN ") {
         Some(i) => i,
         None => return pem.to_string(),
@@ -24,8 +31,8 @@ fn rewrap_pem_body(pem: &str) -> String {
         .chars()
         .filter(|c| !c.is_whitespace())
         .collect();
-    let mut wrapped = String::with_capacity(body.len() + body.len() / 64 + 8);
-    for chunk in body.as_bytes().chunks(64) {
+    let mut wrapped = String::with_capacity(body.len() + body.len() / width + 8);
+    for chunk in body.as_bytes().chunks(width) {
         wrapped.push('\n');
         wrapped.push_str(std::str::from_utf8(chunk).unwrap_or(""));
     }

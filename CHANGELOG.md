@@ -6,6 +6,12 @@ project uses [SemVer](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+- Importing an OpenSSH key from PuTTYgen's "Export OpenSSH key (force
+  new file format)" no longer fails with "invalid Base64 encoding".
+  PuTTYgen wraps the body at 76 chars; `ssh-encoding` requires exactly
+  70. On a Base64 error the importer now retries after re-wrapping.
+
 ## [0.6.1] - 2026-05-11
 
 ### Added
