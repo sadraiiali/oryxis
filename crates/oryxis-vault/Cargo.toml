@@ -23,6 +23,19 @@ ssh-key = { version = "0.6", features = ["ed25519", "std", "rand_core", "encrypt
 rsa = { version = "0.9", features = ["pem"] }
 p256 = { version = "0.13", features = ["ecdsa", "pkcs8", "pem"] }
 p384 = { version = "0.13", features = ["ecdsa", "pkcs8", "pem"] }
+# Encrypted PKCS#8 (`BEGIN ENCRYPTED PRIVATE KEY`) support. We decrypt
+# once with pkcs8's PBES2 implementation, then hand the inner plaintext
+# back to the per-algorithm PKCS#8 parsers above.
+pkcs8 = { version = "0.10", features = ["encryption", "pem"] }
+# PPK (PuTTY .ppk) parser primitives. All transitively present already
+# via russh / ssh-key / argon2; declared here to give the keygen module
+# stable direct paths.
+aes = "0.8"
+cbc = "0.1"
+hmac = "0.12"
+sha1 = "0.10"
+sha2 = "0.10"
+subtle = "2"
 
 [dev-dependencies]
 tempfile = "3"

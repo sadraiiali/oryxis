@@ -51,6 +51,21 @@ pub enum VaultError {
 
     #[error("Wrong key passphrase")]
     WrongKeyPassphrase,
+
+    /// Legacy OpenSSL-encrypted PEM (`Proc-Type: 4,ENCRYPTED` +
+    /// `DEK-Info:`). We don't ship a PBKDF1-MD5 + DES-EDE3
+    /// implementation for this corner case. The caller surfaces an
+    /// i18n'd message with conversion hints.
+    #[error("Legacy OpenSSL-encrypted key (Proc-Type:4,ENCRYPTED) not supported")]
+    EncryptedLegacyPem,
+
+    /// PPK file references an algorithm or KDF we don't implement
+    /// (e.g. DSA, or an unknown PPK version). Caller surfaces an i18n
+    /// message with the verbatim spec name in `0` so the user can act
+    /// on it. Separate from `Crypto(_)` because we want a structural
+    /// match path in the UI.
+    #[error("Unsupported key kind: {0}")]
+    UnsupportedKeyKind(String),
 }
 
 impl From<rusqlite::Error> for VaultError {

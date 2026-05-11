@@ -5559,7 +5559,7 @@ dependencies = [
 
 [[package]]
 name = "oryxis-app"
-version = "0.6.0"
+version = "0.6.1"
 dependencies = [
  "arboard",
  "chrono",
@@ -5716,21 +5716,28 @@ dependencies = [
 name = "oryxis-vault"
 version = "0.1.0"
 dependencies = [
+ "aes 0.8.4",
  "argon2",
  "base64 0.22.1",
+ "cbc 0.1.2",
  "chacha20poly1305",
  "chrono",
  "dirs",
+ "hmac 0.12.1",
  "oryxis-core",
  "p256 0.13.2",
  "p384 0.13.1",
+ "pkcs8 0.10.2",
  "rand 0.8.6",
  "rsa 0.9.10",
  "rusqlite",
  "secrecy",
  "serde",
  "serde_json",
+ "sha1 0.10.6",
+ "sha2 0.10.9",
  "ssh-key",
+ "subtle",
  "tempfile",
  "thiserror 2.0.18",
  "tokio",
@@ -6097,6 +6104,21 @@ dependencies = [
 
 [[package]]
 name = "pkcs5"
+version = "0.7.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e847e2c91a18bfa887dd028ec33f2fe6f25db77db3619024764914affe8b69a6"
+dependencies = [
+ "aes 0.8.4",
+ "cbc 0.1.2",
+ "der 0.7.10",
+ "pbkdf2 0.12.2",
+ "scrypt 0.11.0",
+ "sha2 0.10.9",
+ "spki 0.7.3",
+]
+
+[[package]]
+name = "pkcs5"
 version = "0.8.0-rc.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c5a777c6e26664bc9504b3ce3f6133f8f20d9071f130a4f9fcbd3186959d8dd6"
@@ -6107,7 +6129,7 @@ dependencies = [
  "der 0.8.0",
  "pbkdf2 0.13.0",
  "rand_core 0.10.1",
- "scrypt",
+ "scrypt 0.12.0",
  "sha2 0.11.0",
  "spki 0.8.0",
 ]
@@ -6119,6 +6141,8 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f950b2377845cebe5cf8b5165cb3cc1a5e0fa5cfa3e1f7f55707d8fd82e0a7b7"
 dependencies = [
  "der 0.7.10",
+ "pkcs5 0.7.1",
+ "rand_core 0.6.4",
  "spki 0.7.3",
 ]
 
@@ -6129,7 +6153,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "12922b6296c06eb741b02d7b5161e3aaa22864af38dfa025a1a3ba3f68c84577"
 dependencies = [
  "der 0.8.0",
- "pkcs5",
+ "pkcs5 0.8.0-rc.13",
  "rand_core 0.10.1",
  "spki 0.8.0",
 ]
@@ -7150,7 +7174,7 @@ dependencies = [
  "pageant",
  "pbkdf2 0.12.2",
  "pkcs1 0.8.0-rc.4",
- "pkcs5",
+ "pkcs5 0.8.0-rc.13",
  "pkcs8 0.11.0-rc.11",
  "polyval 0.7.1",
  "rand 0.10.1",
@@ -7419,6 +7443,15 @@ checksum = "9774ba4a74de5f7b1c1451ed6cd5285a32eddb5cccb8cc655a4e50009e06477f"
 
 [[package]]
 name = "salsa20"
+version = "0.10.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "97a22f5af31f73a954c10289c93e8a50cc23d971e80ee446f1f6f7137a088213"
+dependencies = [
+ "cipher 0.4.4",
+]
+
+[[package]]
+name = "salsa20"
 version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2f874456e72520ff1375a06c588eaf074b0f01f9e9e1aada45bd9b7954a6e42c"
@@ -7483,13 +7516,24 @@ checksum = "94143f37725109f92c262ed2cf5e59bce7498c01bcc1502d7b9afe439a4e9f49"
 
 [[package]]
 name = "scrypt"
+version = "0.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0516a385866c09368f0b5bcd1caff3366aace790fcd46e2bb032697bb172fd1f"
+dependencies = [
+ "pbkdf2 0.12.2",
+ "salsa20 0.10.2",
+ "sha2 0.10.9",
+]
+
+[[package]]
+name = "scrypt"
 version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d87af57419b594aa23fa95f09f0e06d80d84ba01c26148c43844cad6ff4485f0"
 dependencies = [
  "cfg-if",
  "pbkdf2 0.13.0",
- "salsa20",
+ "salsa20 0.11.0",
  "sha2 0.11.0",
 ]
 

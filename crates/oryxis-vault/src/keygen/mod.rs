@@ -4,6 +4,11 @@ use oryxis_core::models::key::{KeyAlgorithm, SshKey};
 
 use crate::store::VaultError;
 
+mod pem;
+mod ppk;
+
+pub use pem::is_traditional_encrypted;
+
 /// Generated key pair, private PEM + SshKey model.
 #[derive(Debug)]
 pub struct GeneratedKey {
@@ -17,122 +22,12 @@ pub fn generate_ed25519(label: &str) -> Result<GeneratedKey, VaultError> {
     let private_key = PrivateKey::random(&mut rng, Algorithm::Ed25519)
         .map_err(|e| VaultError::Crypto(format!("Key generation failed: {}", e)))?;
 
-    let public_key = private_key.public_key();
-    let fingerprint = public_key
-        .fingerprint(HashAlg::Sha256)
-        .to_string();
-    let public_key_str = public_key.to_openssh()
-        .map_err(|e| VaultError::Crypto(format!("Public key encoding failed: {}", e)))?;
-    let private_pem = private_key
-        .to_openssh(ssh_key::LineEnding::LF)
-        .map_err(|e| VaultError::Crypto(format!("Private key encoding failed: {}", e)))?
-        .to_string();
-
-    let mut key = SshKey::new(label, KeyAlgorithm::Ed25519);
-    key.fingerprint = fingerprint;
-    key.public_key = public_key_str;
-
-    Ok(GeneratedKey { key, private_pem })
+    finalize(label, private_key)
 }
 
-/// Try to parse a traditional PEM key (PKCS#1, PKCS#8, SEC1) and convert to ssh_key::PrivateKey.
-fn parse_ec_p256(sk: p256::SecretKey) -> PrivateKey {
-    let public = sk.public_key().into();
-    let private = ssh_key::private::EcdsaPrivateKey::<32>::from(sk);
-    PrivateKey::from(ssh_key::private::EcdsaKeypair::NistP256 { public, private })
-}
-
-fn parse_ec_p384(sk: p384::SecretKey) -> PrivateKey {
-    let public = sk.public_key().into();
-    let private = ssh_key::private::EcdsaPrivateKey::<48>::from(sk);
-    PrivateKey::from(ssh_key::private::EcdsaKeypair::NistP384 { public, private })
-}
-
-/// Re-wrap the base64 body of a traditional PEM block to exactly 64 chars
-/// per line. The pem-rfc7468 parser used by `rsa` / `pkcs8` is strict about
-/// the 64-char convention (RFC 7468 §3) and rejects OpenSSL's legacy
-/// 76-char wrapping with a misleading "invalid Base64 encoding" error.
-/// Returns the input unchanged if no BEGIN/END envelope is found.
-fn rewrap_pem_body(pem: &str) -> String {
-    let begin = match pem.find("-----BEGIN ") {
-        Some(i) => i,
-        None => return pem.to_string(),
-    };
-    let begin_line_end = match pem[begin..].find('\n') {
-        Some(off) => begin + off,
-        None => return pem.to_string(),
-    };
-    let end_marker = match pem[begin_line_end..].find("-----END ") {
-        Some(off) => begin_line_end + off,
-        None => return pem.to_string(),
-    };
-    let body: String = pem[begin_line_end..end_marker]
-        .chars()
-        .filter(|c| !c.is_whitespace())
-        .collect();
-    let mut wrapped = String::with_capacity(body.len() + body.len() / 64 + 8);
-    for chunk in body.as_bytes().chunks(64) {
-        wrapped.push('\n');
-        wrapped.push_str(std::str::from_utf8(chunk).unwrap_or(""));
-    }
-    wrapped.push('\n');
-    let mut out = String::with_capacity(pem.len() + 16);
-    out.push_str(&pem[..begin_line_end]);
-    out.push_str(&wrapped);
-    out.push_str(&pem[end_marker..]);
-    out
-}
-
-/// Try to parse a traditional PEM key (PKCS#1, PKCS#8, SEC1) and convert to ssh_key::PrivateKey.
-fn parse_traditional_pem(pem: &str) -> Result<PrivateKey, VaultError> {
-    use rsa::pkcs1::DecodeRsaPrivateKey;
-    use rsa::pkcs8::DecodePrivateKey;
-
-    let normalized = rewrap_pem_body(pem);
-    let pem = normalized.as_str();
-
-    // PKCS#1 RSA: "BEGIN RSA PRIVATE KEY"
-    if pem.contains("BEGIN RSA PRIVATE KEY") {
-        let rsa_key = rsa::RsaPrivateKey::from_pkcs1_pem(pem)
-            .map_err(|e| VaultError::Crypto(format!("PKCS#1 parse error: {}", e)))?;
-        let keypair = ssh_key::private::RsaKeypair::try_from(rsa_key)
-            .map_err(|e| VaultError::Crypto(format!("RSA key conversion error: {}", e)))?;
-        return Ok(PrivateKey::from(keypair));
-    }
-
-    // SEC1 EC: "BEGIN EC PRIVATE KEY"
-    if pem.contains("BEGIN EC PRIVATE KEY") {
-        if let Ok(sk) = p256::SecretKey::from_sec1_pem(pem) {
-            return Ok(parse_ec_p256(sk));
-        }
-        if let Ok(sk) = p384::SecretKey::from_sec1_pem(pem) {
-            return Ok(parse_ec_p384(sk));
-        }
-        return Err(VaultError::Crypto("Unsupported EC curve (only P-256 and P-384 are supported)".into()));
-    }
-
-    // PKCS#8: "BEGIN PRIVATE KEY" (can contain RSA, EC, or Ed25519)
-    if pem.contains("BEGIN PRIVATE KEY") {
-        if let Ok(rsa_key) = rsa::RsaPrivateKey::from_pkcs8_pem(pem) {
-            let keypair = ssh_key::private::RsaKeypair::try_from(rsa_key)
-                .map_err(|e| VaultError::Crypto(format!("RSA key conversion error: {}", e)))?;
-            return Ok(PrivateKey::from(keypair));
-        }
-        if let Ok(sk) = p256::SecretKey::from_pkcs8_pem(pem) {
-            return Ok(parse_ec_p256(sk));
-        }
-        if let Ok(sk) = p384::SecretKey::from_pkcs8_pem(pem) {
-            return Ok(parse_ec_p384(sk));
-        }
-        return Err(VaultError::Crypto("Unsupported PKCS#8 key type (supported: RSA, ECDSA P-256/P-384)".into()));
-    }
-
-    Err(VaultError::Crypto("Unrecognized PEM format".into()))
-}
-
-/// Cheap structural check: returns `true` if the PEM looks like an
-/// encrypted key. Used by the UI to surface the passphrase field as
-/// soon as the user picks the file, without waiting for a Save click.
+/// Cheap structural check: returns `true` if the key file looks
+/// encrypted. Used by the UI to surface the passphrase field as soon
+/// as the user picks the file, without waiting for a Save click.
 /// Conservative, false negatives are fine (Save will still surface
 /// `KeyNeedsPassphrase`); false positives would prompt unnecessarily.
 pub fn is_key_encrypted(private_pem: &str) -> bool {
@@ -140,16 +35,14 @@ pub fn is_key_encrypted(private_pem: &str) -> bool {
     let normalized = stripped.replace("\r\n", "\n").replace('\r', "\n");
     let trimmed = normalized.trim();
 
-    // PKCS#8 / OpenSSL traditional PEM with explicit ENCRYPTED header.
-    if trimmed.contains("BEGIN ENCRYPTED PRIVATE KEY") {
+    if ppk::is_ppk(trimmed) {
+        return ppk::is_encrypted(trimmed);
+    }
+
+    if is_traditional_encrypted(trimmed) {
         return true;
     }
-    if trimmed.contains("ENCRYPTED")
-        && (trimmed.contains("BEGIN RSA PRIVATE KEY")
-            || trimmed.contains("BEGIN EC PRIVATE KEY"))
-    {
-        return true;
-    }
+
     // OpenSSH format, parse cheaply just to read the cipher field.
     if trimmed.contains("BEGIN OPENSSH PRIVATE KEY")
         && let Ok(parsed) = ssh_key::PrivateKey::from_openssh(trimmed) {
@@ -160,8 +53,10 @@ pub fn is_key_encrypted(private_pem: &str) -> bool {
 
 /// Import an SSH key from any supported format:
 /// - OpenSSH (`BEGIN OPENSSH PRIVATE KEY`), supports passphrase-encrypted keys
+/// - PuTTY PPK v2 / v3 (`PuTTY-User-Key-File-2/3:`), supports passphrase-encrypted keys
 /// - PKCS#1 RSA (`BEGIN RSA PRIVATE KEY`)
 /// - PKCS#8 (`BEGIN PRIVATE KEY`), RSA, ECDSA P-256/P-384, Ed25519
+/// - Encrypted PKCS#8 (`BEGIN ENCRYPTED PRIVATE KEY`), RSA, ECDSA P-256/P-384
 /// - SEC1 EC (`BEGIN EC PRIVATE KEY`), P-256, P-384
 ///
 /// `passphrase` is consulted only when the key is detected as encrypted.
@@ -181,22 +76,9 @@ pub fn import_key(
     let normalized = stripped.replace("\r\n", "\n").replace('\r', "\n");
     let trimmed = normalized.trim();
 
-    // Traditional PEM encrypted with PKCS#5/PKCS#8 carry an explicit
-    // header. We don't support that path yet; surface a clear error so
-    // the user knows to convert the key.
-    let traditional_encrypted = trimmed.contains("BEGIN ENCRYPTED PRIVATE KEY")
-        || (trimmed.contains("ENCRYPTED")
-            && (trimmed.contains("BEGIN RSA PRIVATE KEY")
-                || trimmed.contains("BEGIN EC PRIVATE KEY")));
-    if traditional_encrypted && !trimmed.contains("BEGIN OPENSSH PRIVATE KEY") {
-        return Err(VaultError::Crypto(
-            "Encrypted PKCS#1/PKCS#8 keys are not supported. \
-             Remove the passphrase first (e.g. ssh-keygen -p -f <file> -N '')."
-                .into(),
-        ));
-    }
-
-    let private_key = if trimmed.contains("BEGIN OPENSSH PRIVATE KEY") {
+    let private_key = if ppk::is_ppk(trimmed) {
+        ppk::parse(trimmed, passphrase)?
+    } else if trimmed.contains("BEGIN OPENSSH PRIVATE KEY") {
         let parsed = PrivateKey::from_openssh(trimmed)
             .map_err(|e| VaultError::Crypto(format!("Failed to parse OpenSSH key: {}", e)))?;
         if parsed.is_encrypted() {
@@ -211,9 +93,17 @@ pub fn import_key(
             parsed
         }
     } else {
-        parse_traditional_pem(trimmed)?
+        pem::parse(trimmed, passphrase)?
     };
 
+    finalize(label, private_key)
+}
+
+/// Map an `ssh_key::PrivateKey` to the `KeyAlgorithm` enum and an
+/// OpenSSH-encoded PEM, then build the resulting `GeneratedKey`.
+/// Returns an error for algorithms we don't claim to support, rather
+/// than silently mislabeling them.
+fn finalize(label: &str, private_key: PrivateKey) -> Result<GeneratedKey, VaultError> {
     let public_key = private_key.public_key();
     let fingerprint = public_key.fingerprint(HashAlg::Sha256).to_string();
     let public_key_str = public_key.to_openssh()
@@ -225,25 +115,27 @@ pub fn import_key(
         Algorithm::Ecdsa { curve } => match curve {
             ssh_key::EcdsaCurve::NistP256 => KeyAlgorithm::EcdsaP256,
             ssh_key::EcdsaCurve::NistP384 => KeyAlgorithm::EcdsaP384,
-            _ => KeyAlgorithm::EcdsaP256,
+            ssh_key::EcdsaCurve::NistP521 => {
+                return Err(VaultError::UnsupportedKeyKind(
+                    "ecdsa-sha2-nistp521".into(),
+                ));
+            }
         },
-        _ => KeyAlgorithm::Ed25519,
+        other => {
+            return Err(VaultError::UnsupportedKeyKind(other.as_str().to_string()));
+        }
     };
 
-    // Re-encode as OpenSSH format for consistent storage
-    let stored_pem = private_key
+    let private_pem = private_key
         .to_openssh(ssh_key::LineEnding::LF)
-        .map(|s| s.to_string())
-        .unwrap_or_else(|_| trimmed.to_string());
+        .map_err(|e| VaultError::Crypto(format!("Private key encoding failed: {}", e)))?
+        .to_string();
 
     let mut key = SshKey::new(label, algorithm);
     key.fingerprint = fingerprint;
     key.public_key = public_key_str;
 
-    Ok(GeneratedKey {
-        key,
-        private_pem: stored_pem,
-    })
+    Ok(GeneratedKey { key, private_pem })
 }
 
 #[cfg(test)]
@@ -270,7 +162,6 @@ mod tests {
 
     #[test]
     fn import_roundtrip() {
-        // Generate then import
         let generated = generate_ed25519("original").unwrap();
         let imported = import_key("imported", &generated.private_pem, None).unwrap();
         assert_eq!(imported.key.fingerprint, generated.key.fingerprint);
@@ -310,26 +201,21 @@ mod tests {
 
     #[test]
     fn import_encrypted_openssh_requires_passphrase() {
-        // Build an encrypted OpenSSH key via the ssh-key crate directly.
         use ssh_key::{Algorithm, PrivateKey};
         let mut rng = rand::thread_rng();
         let key = PrivateKey::random(&mut rng, Algorithm::Ed25519).unwrap();
         let encrypted = key.encrypt(&mut rng, b"hunter2").unwrap();
         let pem = encrypted.to_openssh(ssh_key::LineEnding::LF).unwrap().to_string();
 
-        // No passphrase → KeyNeedsPassphrase.
         let err = import_key("enc", &pem, None).unwrap_err();
         assert!(matches!(err, VaultError::KeyNeedsPassphrase));
 
-        // Empty passphrase counted as missing.
         let err = import_key("enc", &pem, Some("")).unwrap_err();
         assert!(matches!(err, VaultError::KeyNeedsPassphrase));
 
-        // Wrong passphrase → WrongKeyPassphrase.
         let err = import_key("enc", &pem, Some("nope")).unwrap_err();
         assert!(matches!(err, VaultError::WrongKeyPassphrase));
 
-        // Correct passphrase succeeds and the stored PEM is unencrypted.
         let imported = import_key("enc", &pem, Some("hunter2")).unwrap();
         assert!(imported.private_pem.contains("BEGIN OPENSSH PRIVATE KEY"));
         let reparsed = PrivateKey::from_openssh(&imported.private_pem).unwrap();

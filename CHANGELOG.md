@@ -6,6 +6,32 @@ project uses [SemVer](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.6.1] - 2026-05-11
+
+### Added
+- **PuTTY `.ppk` import** (v2 and v3, RSA / Ed25519 / ECDSA P-256 /
+  ECDSA P-384, encrypted or not). Hand-rolled parser: v2 uses SHA-1
+  KDF + AES-256-CBC + HMAC-SHA-1, v3 uses Argon2id/i/d + AES-256-CBC +
+  HMAC-SHA-256. Verified byte-for-byte against fixtures emitted by
+  the real `puttygen` binary (`crates/oryxis-vault/tests/fixtures/ppk`).
+- **Encrypted PKCS#8 import** (`BEGIN ENCRYPTED PRIVATE KEY`, RFC 5958
+  PBES2). Passphrase prompt fires on file pick, same flow as
+  encrypted OpenSSH keys.
+- **Ed25519 in PKCS#8** (OID `1.3.101.112`, RFC 8410). Previously
+  only Ed25519 inside OpenSSH wrappers loaded.
+
+### Fixed
+- DSA and ECDSA P-521 keys no longer silently mislabel as Ed25519 /
+  P-256 when imported via OpenSSH. They return an actionable
+  `UnsupportedKeyKind` error so the UI can show the right message.
+- Legacy OpenSSL-encrypted PEM (`Proc-Type:4,ENCRYPTED` + `DEK-Info:`)
+  now surfaces a dedicated error pointing the user at the new `.ppk`
+  path or `ssh-keygen -p`, instead of a generic crate-internal string.
+
+### i18n
+- Two new keys (`key_encrypted_legacy_pem`, `key_unsupported_kind`)
+  translated across all 11 languages.
+
 ## [0.6.0] - 2026-05-10
 
 ### Added
